@@ -1,0 +1,28 @@
+name: Unzip project
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'criptoya-like-mvp-latest.zip'
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unzip
+        run: |
+          unzip -o criptoya-like-mvp-latest.zip -d .
+          rm -f criptoya-like-mvp-latest.zip
+
+      - name: Commit unzipped files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Unzip project" || echo "Nothing to commit"
+          git push
