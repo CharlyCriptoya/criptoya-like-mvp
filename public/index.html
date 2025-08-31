@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CriptoYa-like MVP</title>
+<style>
+  :root{
+    --fg:#eaf1f6; --muted:#9ab1c1; --accent:#39c27f; --warn:#f39c12;
+    --card:#0f151d; --border:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box} body{margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto; color:var(--fg)}
+
+  /* Fondo: usa tu archivo /public/Muro.jpg (ojo mayúscula) */
+  body{
+    min-height:100dvh;
+    background:
+      /* un velito MUY leve para que se lea sin perder la foto */
+      radial-gradient(1200px 800px at 20% 10%, rgba(0,0,0,.18), transparent 60%),
+      radial-gradient(1000px 700px at 80% 80%, rgba(0,0,0,.18), transparent 60%),
+      url("/Muro.jpg") center/cover no-repeat fixed;
+  }
+
+  /* Contenedor con glass muy claro */
+  .wrap{max-width:1100px; margin:0 auto; padding:16px}
+  .panel{
+    background:rgba(10,15,20,.28);   /* <- si lo ves oscuro, bajá a .22 o .18 */
+    backdrop-filter: blur(6px);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:14px;
+  }
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+  .brand{font-weight:900; letter-spacing:.2px}
+  .pills{display:flex; gap:10px; flex-wrap:wrap}
+  .pill{
+    padding:8px 14px; border-radius:999px; border:1px solid var(--border);
+    background:rgba(0,0,0,.28); color:var(--fg); cursor:pointer; font-weight:600;
+  }
+  .pill.active{outline:2px solid var(--accent); outline-offset:1px}
+
+  table{width:100%; border-collapse:separate; border-spacing:0 10px}
+  thead th{color:var(--muted); font-weight:700; text-align:left; padding:6px 8px}
+  tbody tr{background:rgba(15,21,29,.65); border-radius:12px; overflow:hidden}
+  td{padding:14px 12px; border-top:1px solid var(--border); border-bottom:1px solid var(--border)}
+  tbody tr td:first-child{border-left:1px solid var(--border); border-radius:12px 0 0 12px}
+  tbody tr td:last-child{border-right:1px solid var(--border); border-radius:0 12px 12px 0}
+  .center{text-align:center}
+  .logo{width:28px; height:28px; display:inline-grid; place-items:center; font-weight:800;
+        border-radius:8px; background:rgba(255,255,255,.10); margin-right:10px}
+
+  .badge{
+    display:inline-block; margin-left:8px; padding:3px 10px; font-size:12px; font-weight:800;
+    border:1px solid var(--border); border-radius:999px;
+  }
+  .bestBuy{color:var(--accent)}
+  .bestSell{color:var(--warn)}
+
+  @media(max-width:760px){
+    thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tr{margin-bottom:12px}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <div class="topbar">
+        <div class="brand">CriptoYa-like</div>
+        <div class="pills" id="assetPills">
+          <button class="pill active" data-asset="BTC">BTC</button>
+          <button class="pill" data-asset="ETH">ETH</button>
+          <button class="pill" data-asset="USDT">USDT</button>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Exchange</th><th class="center">Compra</th><th class="center">Venta</th><th class="center">Spread</th></tr>
+        </thead>
+        <tbody id="rows">
+          <tr><td class="center" colspan="4">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  // Datos demo por asset (puedes reemplazar por tu fetch luego)
+  const DATA = {
+    BTC: [
+      {name:'Binance',  initials:'B',  buy:9870, sell:9950},
+      {name:'Bitget',   initials:'BG', buy:9865, sell:9945},
+      {name:'KuCoin',   initials:'K',  buy:9880, sell:9960},
+      {name:'Coinbase', initials:'C',  buy:9850, sell:9930},
+      {name:'LetsBit',  initials:'LB', buy:9875, sell:9955},
+      {name:'Lemon',    initials:'L',  buy:9890, sell:9970},
+      {name:'Bitso',    initials:'BS', buy:9845, sell:9925},
+    ],
+    ETH: [
+      {name:'Binance',  initials:'B',  buy:2900, sell:2920},
+      {name:'Bitget',   initials:'BG', buy:2895, sell:2915},
+      {name:'KuCoin',   initials:'K',  buy:2905, sell:2925},
+      {name:'Coinbase', initials:'C',  buy:2890, sell:2910},
+      {name:'LetsBit',  initials:'LB', buy:2902, sell:2922},
+      {name:'Lemon',    initials:'L',  buy:2908, sell:2928},
+      {name:'Bitso',    initials:'BS', buy:2888, sell:2908},
+    ],
+    USDT: [
+      {name:'Binance',  initials:'B',  buy:1.000, sell:1.001},
+      {name:'Bitget',   initials:'BG', buy:0.999, sell:1.001},
+      {name:'KuCoin',   initials:'K',  buy:1.000, sell:1.002},
+      {name:'Coinbase', initials:'C',  buy:1.000, sell:1.001},
+      {name:'LetsBit',  initials:'LB', buy:0.999, sell:1.001},
+      {name:'Lemon',    initials:'L',  buy:1.000, sell:1.002},
+      {name:'Bitso',    initials:'BS', buy:0.999, sell:1.001},
+    ]
+  };
+
+  const $rows = document.getElementById('rows');
+  const fmtUSD = n => n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2});
+
+  function render(asset='BTC'){
+    const items = DATA[asset];
+    if(!items){ $rows.innerHTML='<tr><td class="center" colspan="4">Sin datos</td></tr>'; return; }
+
+    const bestBuy  = Math.min(...items.map(i=>i.sell)); // dónde conviene comprar (más barato venderte)
+    const bestSell = Math.max(...items.map(i=>i.buy));  // dónde conviene vender (pagan más)
+
+    $rows.innerHTML = items.map(i=>{
+      const spread = ( (i.sell - i.buy) / i.buy ) * 100;
+      const badgeBuy  = i.sell===bestBuy  ? '<span class="badge bestBuy">Mejor compra</span>' : '';
+      const badgeSell = i.buy===bestSell  ? '<span class="badge bestSell">Mejor venta</span>'  : '';
+
+      return `
+        <tr>
+          <td><span class="logo">${i.initials}</span>${i.name}</td>
+          <td class="center">${fmtUSD(i.buy)}</td>
+          <td class="center">${fmtUSD(i.sell)} ${badgeSell}</td>
+          <td class="center">${spread.toFixed(2)}% ${badgeBuy}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // Pestañas
+  document.getElementById('assetPills').addEventListener('click', e=>{
+    const btn = e.target.closest('.pill'); if(!btn) return;
+    document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    render(btn.dataset.asset);
+  });
+
+  render('BTC');
+</script>
+</body>
+</html>
