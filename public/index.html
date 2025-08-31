@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>CriptoYa-like MVP</title>
+<style>
+  :root{
+    --fg:#eaf1f6; --muted:#9ab1c1; --accent:#39c27f; --warn:#f39c12;
+    --border:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--fg); font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto;
+    /* 👇👇 Tu fondo: asegurate de subir assets/bg_ladrillos.jpg */
+    background: url("assets/bg_ladrillos.jpg") center/cover no-repeat fixed;
+  }
+
+  /* UI */
+  .container{max-width:1100px;margin:0 auto;padding:12px}
+  .glass{background:rgba(10,15,20,.65);backdrop-filter:blur(10px);
+         border:1px solid var(--border); border-radius:14px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;margin:12px}
+  .brand{font-weight:900;letter-spacing:.2px}
+  .muted{color:var(--muted)}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding:10px 16px}
+  .pills{display:flex;gap:8px}
+  .pill{padding:8px 12px;border-radius:999px;border:1px solid var(--border);
+        background:rgba(0,0,0,.35);color:var(--fg);cursor:pointer}
+  .pill.active{outline:2px solid var(--accent);outline-offset:1px}
+  .table-wrap{padding:8px 16px 16px}
+  table{width:100%;border-collapse:separate;border-spacing:0 8px}
+  thead th{padding:8px;color:var(--muted)}
+  tbody tr{background:rgba(15,21,29,.78)}
+  td{padding:12px 10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+  tbody tr td:first-child{border-left:1px solid var(--border);border-radius:10px 0 0 10px}
+  tbody tr td:last-child{border-right:1px solid var(--border);border-radius:0 10px 10px 0}
+  .center{text-align:center}
+  .exch{display:flex;align-items:center;gap:10px;font-weight:600}
+  .logo-badge{width:28px;height:28px;display:grid;place-items:center;
+              border-radius:6px;background:rgba(255,255,255,.08);font-weight:700}
+  .badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;
+         border:1px solid var(--border);font-weight:700;font-size:12px}
+  .bestBuy{color:var(--accent)}
+  .bestSell{color:var(--warn)}
+  .footer{padding:16px;text-align:center;color:var(--muted)}
+
+  @media (max-width:760px){
+    thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tr{margin-bottom:12px}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="glass">
+      <div class="topbar">
+        <div class="brand">CriptoYa-like</div>
+        <div class="muted" id="pairLabel">BTC / USD</div>
+      </div>
+
+      <div class="controls">
+        <div class="pills" id="assetPills">
+          <button class="pill active" data-asset="BTC">BTC</button>
+          <button class="pill" data-asset="ETH">ETH</button>
+          <button class="pill" data-asset="USDT">USDT</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Exchange</th><th class="center">Compra</th><th class="center">Venta</th><th class="center">Spread</th></tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td class="center muted" colspan="4">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="footer">© 2025 CriptoYa-like MVP</div>
+    </div>
+  </div>
+
+<script>
+/* ===== Datos DEMO en USD por asset ===== */
+const DATA = {
+  BTC: [
+    { name:"Binance", initials:"B",  buy:9870, sell:9950 },
+    { name:"Bitget",  initials:"BG", buy:9865, sell:9945 },
+    { name:"KuCoin",  initials:"K",  buy:9880, sell:9960 },
+    { name:"Coinbase",initials:"C",  buy:9850, sell:9930 },
+  ],
+  ETH: [
+    { name:"Binance", initials:"B",  buy:3170, sell:3220 },
+    { name:"Bitget",  initials:"BG", buy:3165, sell:3215 },
+    { name:"KuCoin",  initials:"K",  buy:3180, sell:3230 },
+    { name:"Coinbase",initials:"C",  buy:3155, sell:3205 },
+  ],
+  USDT: [
+    { name:"Binance", initials:"B",  buy:0.999, sell:1.001 },
+    { name:"Bitget",  initials:"BG", buy:0.999, sell:1.002 },
+    { name:"KuCoin",  initials:"K",  buy:1.000, sell:1.002 },
+    { name:"Coinbase",initials:"C",  buy:0.998, sell:1.001 },
+  ]
+};
+
+let currentAsset = "BTC";
+
+function money(v){
+  // si el valor es muy chico (USDT), formateo con 3 decimales; si no, 2
+  const opts = v < 2
+    ? { minimumFractionDigits:3, maximumFractionDigits:3 }
+    : { minimumFractionDigits:2, maximumFractionDigits:2 };
+  return "$" + v.toLocaleString("en-US", opts);
+}
+
+function render(){
+  const rows = DATA[currentAsset];
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+
+  const bestBuy = Math.min(...rows.map(r => r.sell));
+  const bestSell = Math.max(...rows.map(r => r.buy));
+
+  rows.forEach(r=>{
+    const tr = document.createElement("tr");
+    const spread = ( (r.sell - r.buy) / r.buy * 100 ).toFixed(2) + "%";
+
+    const tag = r.sell===bestBuy ? '<span class="badge bestBuy">Mejor compra</span>'
+              : r.buy===bestSell ? '<span class="badge bestSell">Mejor venta</span>'
+              : spread;
+
+    tr.innerHTML = `
+      <td><div class="exch"><span class="logo-badge">${r.initials}</span>${r.name}</div></td>
+      <td class="center">${money(r.buy)}</td>
+      <td class="center">${money(r.sell)}</td>
+      <td class="center">${tag}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("pairLabel").textContent = `${currentAsset} / USD`;
+}
+
+function wirePills(){
+  const pills = document.querySelectorAll("#assetPills .pill");
+  pills.forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      pills.forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      currentAsset = btn.dataset.asset;
+      render();
+    });
+  });
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  wirePills();
+  render();
+});
+</script>
+</body>
+</html>
