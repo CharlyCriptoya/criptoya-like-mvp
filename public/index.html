@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>CriptoYa-like</title>
+<style>
+  :root{
+    --fg:#eaf1f6; --muted:#9ab1c1; --accent:#39c27f; --warn:#f39c12;
+    --border:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto;color:var(--fg);min-height:100dvh;overflow-y:overlay}
+
+  /* Fondo con tu imagen */
+  .bg{
+    position:fixed;inset:0;z-index:-2;
+    background:url('Muro.jpg') center/cover no-repeat fixed;
+    filter:saturate(1.1) contrast(1.05);
+  }
+  /* Vignette suave para que se lea el texto sin tapar la imagen */
+  .vignette{position:fixed;inset:0;z-index:-1;
+    background:
+      radial-gradient(1200px 700px at 20% 15%, rgba(0,0,0,.15), transparent 60%),
+      radial-gradient(1100px 600px at 85% 75%, rgba(0,0,0,.12), transparent 60%);
+    pointer-events:none;
+  }
+
+  /* Glass más claro (25%): se ve el muro */
+  .glass{
+    background:rgba(10,15,20,.25);
+    backdrop-filter:blur(12px);
+    border:1px solid var(--border);
+    border-radius:16px;
+    box-shadow:0 8px 40px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+
+  .wrap{max-width:1100px;margin:24px auto;padding:12px}
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 18px}
+  .brand{font-weight:900;letter-spacing:.2px}
+  .right{display:flex;gap:8px;align-items:center;color:var(--muted);font-weight:600}
+
+  .controls{display:flex;justify-content:space-between;align-items:center;padding:12px 18px}
+  .pills{display:flex;gap:10px;flex-wrap:wrap}
+  .pill{
+    padding:8px 14px;border-radius:999px;border:1px solid var(--border);
+    background:rgba(0,0,0,.35);color:var(--fg);cursor:pointer;font-weight:700;
+    transition:filter .15s,box-shadow .15s,transform .05s;
+  }
+  .pill:hover{filter:brightness(1.08);box-shadow:0 0 14px rgba(57,194,127,.18)}
+  .pill.active{outline:2px solid var(--accent);outline-offset:1px}
+
+  .currency{
+    display:inline-flex;border:1px solid var(--border);border-radius:999px;overflow:hidden;
+  }
+  .currency button{
+    padding:8px 12px;background:rgba(0,0,0,.35);border:0;color:var(--fg);font-weight:700;
+  }
+  .currency button.active{background:rgba(0,0,0,.55);outline:2px solid var(--accent);outline-offset:-2px}
+
+  .table-wrap{padding:6px 12px 18px}
+  .table{width:100%;border-collapse:separate;border-spacing:0 10px}
+  .row{display:grid;grid-template-columns:1.2fr .9fr .9fr .7fr;gap:8px;align-items:center;
+       background:rgba(10,15,20,.35);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .head{color:var(--muted);font-weight:800;background:transparent;border:0;padding:0;margin:10px 0}
+  .exch{display:flex;align-items:center;gap:12px;font-weight:800}
+  .badge-logo{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+              background:rgba(0,0,0,.35);display:grid;place-items:center;font-weight:900}
+  .center{text-align:center}
+  .muted{color:var(--muted)}
+  .foot{padding:14px;text-align:center;color:var(--muted)}
+
+  .chip{
+    display:inline-block;margin-left:8px;padding:4px 10px;border-radius:999px;
+    border:1px solid var(--border);font-weight:800;font-size:12px;white-space:nowrap;
+  }
+  .bestBuy{color:var(--accent);box-shadow:0 0 10px rgba(57,194,127,.25)}
+  .bestSell{color:var(--warn);box-shadow:0 0 10px rgba(243,156,18,.25)}
+
+  @media(max-width:760px){
+    .row{grid-template-columns:1fr;gap:6px}
+    .head{display:none}
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div><div class="vignette"></div>
+
+  <div class="wrap glass">
+    <div class="topbar">
+      <div class="brand">CriptoYa-like</div>
+      <div class="right">
+        <div id="marketLabel" class="muted">Precios demo</div>
+        <div class="currency" id="currencySwitch">
+          <button data-c="USD" class="active">$ USD</button>
+          <button data-c="ARS">$ ARS</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="pills" id="assetTabs">
+        <button class="pill active" data-asset="BTC">BTC</button>
+        <button class="pill" data-asset="ETH">ETH</button>
+        <button class="pill" data-asset="USDT">USDT</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="row head">
+        <div>Exchange</div>
+        <div class="center">Compra</div>
+        <div class="center">Venta</div>
+        <div class="center">Spread</div>
+      </div>
+      <div id="rows"></div>
+    </div>
+
+    <div class="foot">© 2025 CriptoYa-like MVP — Fondo: <em>Muro.jpg</em></div>
+  </div>
+
+<script>
+/* ====== DEMO DATA (cambiamos luego por APIs reales) ====== */
+const data = {
+  BTC: [
+    { name:"Binance",  initials:"B",  buy: 9870, sell: 9950 },
+    { name:"Bitget",   initials:"BG", buy: 9865, sell: 9945 },
+    { name:"KuCoin",   initials:"K",  buy: 9880, sell: 9960 },
+    { name:"Coinbase", initials:"C",  buy: 9850, sell: 9930 },
+    { name:"LetsBit",  initials:"LB", buy: 9875, sell: 9955 },
+    { name:"Lemon",    initials:"L",  buy: 9890, sell: 9970 },
+    { name:"Bitso",    initials:"BS", buy: 9845, sell: 9925 },
+  ],
+  ETH: [
+    { name:"Binance",  initials:"B",  buy: 2550, sell: 2570 },
+    { name:"Bitget",   initials:"BG", buy: 2546, sell: 2566 },
+    { name:"KuCoin",   initials:"K",  buy: 2552, sell: 2572 },
+    { name:"Coinbase", initials:"C",  buy: 2540, sell: 2560 },
+    { name:"LetsBit",  initials:"LB", buy: 2551, sell: 2571 },
+    { name:"Lemon",    initials:"L",  buy: 2556, sell: 2576 },
+    { name:"Bitso",    initials:"BS", buy: 2538, sell: 2558 },
+  ],
+  USDT: [
+    { name:"Binance",  initials:"B",  buy: 1.0000, sell: 1.0010 },
+    { name:"Bitget",   initials:"BG", buy: 0.9990, sell: 1.0005 },
+    { name:"KuCoin",   initials:"K",  buy: 1.0000, sell: 1.0015 },
+    { name:"Coinbase", initials:"C",  buy: 0.9992, sell: 1.0008 },
+    { name:"LetsBit",  initials:"LB", buy: 0.9995, sell: 1.0012 },
+    { name:"Lemon",    initials:"L",  buy: 1.0005, sell: 1.0020 },
+    { name:"Bitso",    initials:"BS", buy: 0.9988, sell: 1.0003 },
+  ]
+};
+
+/* ====== Config: tipo de cambio demo (luego lo reemplazamos por MEP/blue) ====== */
+let currency = "USD";
+let usdArs = 1000; // <- temporal; después conectamos cotizaciones reales
+
+const rowsEl = document
