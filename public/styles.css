@@ -1,8 +1,0 @@
-.bg{
-  position:fixed; inset:0; z-index:-2;
-  background:
-    radial-gradient(1000px 600px at 15% 20%, rgba(80,0,255,.25), transparent 60%),
-    radial-gradient(900px 500px at 85% 70%, rgba(0,255,170,.18), transparent 60%),
-    url('assets/bg_graffiti.jpg') center/cover no-repeat fixed;
-  filter:saturate(1.1) contrast(1.05);
-}
