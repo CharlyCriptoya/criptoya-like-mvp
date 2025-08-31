@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CriptoYa-like MVP</title>
+  <meta name="theme-color" content="#0a0f14">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Fondo -->
+  <div class="bg"></div>
+
+  <div class="container">
+    <div class="glass">
+      <div class="topbar">
+        <div class="brand">CriptoYa-like</div>
+        <div class="muted">Precios en ARS</div>
+      </div>
+
+      <div class="controls">
+        <div class="pills">
+          <button class="pill active" type="button">BTC</button>
+          <button class="pill" type="button">ETH</button>
+          <button class="pill" type="button">USDT</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Exchange</th>
+              <th class="center">Compra</th>
+              <th class="center">Venta</th>
+              <th class="center">Spread</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td class="center muted" colspan="4">Cargando precios...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="footer">© 2025 CriptoYa-like MVP</div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
