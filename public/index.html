@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CriptoYA Like — Comparador</title>
+  <style>
+    :root { --bg: url('./Muro.jpg'); }
+    *{box-sizing:border-box} html,body{height:100%;margin:0}
+    body{
+      min-height:100vh;background-image:var(--bg);background-size:cover;
+      background-position:center;background-attachment:fixed;color:#fff;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial,'Noto Sans';
+      position:relative;
+    }
+    .overlay{position:fixed;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,.35));z-index:0}
+    .wrap{position:relative;z-index:1;min-height:100vh;display:grid;place-items:center;padding:22px}
+    .card{width:min(980px,96vw);padding:22px;border-radius:16px;background:rgba(255,255,255,0.08);
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      border:1px solid rgba(255,255,255,0.18);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    h1{margin:0 0 10px;font-weight:800;letter-spacing:.2px}
+    .sub{margin:0 0 14px;opacity:.95}
+    /* tabs */
+    #asset-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 12px}
+    #asset-tabs button{
+      padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.25);
+      background:transparent;color:#fff;cursor:pointer;backdrop-filter:blur(4px)
+    }
+    #asset-tabs button[aria-selected="true"]{background:rgba(255,255,255,.22)}
+    /* grilla top 10 */
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .tile{padding:14px;border-radius:12px;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.15)}
+    .sym{font-weight:800}.ex{font-size:12px;opacity:.85}
+    .price{font-size:22px;margin-top:6px}.row{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .up{color:#6DFF9C}.down{color:#FF8A8A}
+    /* tabla completa */
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:8px;border-bottom:1px dashed rgba(255,255,255,.12)}
+    th{text-align:left;border-bottom:1px solid rgba(255,255,255,.22)}
+    td:last-child,th:last-child{text-align:right}
+    footer{margin-top:16px;font-size:12px;opacity:.85;text-align:right}
+    a{color:#fff;text-decoration:underline;text-underline-offset:3px}
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="wrap">
+    <main class="card">
+      <h1>CriptoYA Like — Demo</h1>
+      <p class="sub" id="subtitle">Elegí una moneda para ver los <b>10 mejores precios</b> y la lista completa por exchange.</p>
+
+      <div id="asset-tabs" role="tablist" aria-label="Monedas"></div>
+      <section id="prices" class="grid" aria-live="polite"></section>
+      <section id="full-list" style="margin-top:16px"></section>
+
+      <footer>Fuente: APIs públicas (Binance, KuCoin, Bybit) y P2P vía CriptoYA. — Recarga forzada si no ves cambios.</footer>
+    </main>
+  </div>
+  <script src="./app.js?v=3" defer></script>
+</body>
+</html>
