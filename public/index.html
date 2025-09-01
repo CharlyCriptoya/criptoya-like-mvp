@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Comparador Simple • Multi-Exchange (USD & ARS)</title>
+<style>
+  :root{
+    --bg1: rgba(12,20,40,.86);
+    --bg2: rgba(10,16,34,.86);
+    --card: rgba(18,30,60,.85);
+    --line:#223055;
+    --text:#eaf1ff;
+    --muted:#9fb0d1;
+    --good:#2ecc71;
+    --bad:#ff6b6b;
+    --accent:#4da3ff;
+  }
+  *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+  body{
+    margin:0;color:var(--text);
+    background: linear-gradient(180deg,var(--bg1),var(--bg2));
+    background-attachment:fixed;background-size:cover;
+  }
+  header{padding:16px 18px;border-bottom:1px solid var(--line);backdrop-filter: blur(6px);background:rgba(10,20,45,.55)}
+  h1{margin:0;font-size:18px;letter-spacing:.3px}
+  main{max-width:1100px;margin:18px auto;padding:0 16px 40px}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .control{background:var(--card);border:1px solid var(--line);padding:8px 10px;border-radius:10px;display:flex;align-items:center;gap:8px}
+  input,button{background:#0e1b3d;border:1px solid #304777;color:var(--text);padding:8px 10px;border-radius:8px}
+  button{background:var(--accent);border:none;cursor:pointer}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px;border-bottom:1px solid #2a3f6e;text-align:left}
+  th{font-size:12px;color:#cfe0ff;text-transform:uppercase;letter-spacing:.5px}
+  .muted{color:var(--muted);font-size:12px}
+  .ok{color:var(--good)} .bad{color:var(--bad)}
+  .price{font-weight:900}
+  .chip{display:inline-block;border:1px solid #2a3f6e;border-radius:999px;padding:4px 8px;font-size:12px;color:#cfe0ff}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media(min-width:940px){.grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Comparador Simple • Binance / Bitget / Bitstamp / Kraken / Coinbase</h1>
+    <div class="controls">
+      <div class="control">
+        <span class="muted">USD→ARS</span>
+        <input id="arsRate" type="number" step="0.01" placeholder="auto" style="width:120px">
+        <button id="applyRate">Usar</button>
+      </div>
+      <div class="control"><span class="chip">Actualiza cada 5s</span></div>
+      <div class="control"><span class="chip">Última: <span id="lastTs">—</span></span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="muted">Monedas incluidas: <b id="coinsLbl"></b>. Cambiá la lista en el código si querés (variable <code>COINS</code>).</div>
+  </section>
+
+  <section id="coins" class="grid"></section>
+
+  <section class="card">
+    <strong>Notas</strong>
+    <ul class="muted">
+      <li>**USD**: Bitstamp/Craken/Coinbase cotizan en USD. **USDT≈USD** en Binance/Bitget (con pequeña diferencia).</li>
+      <li>Si algún exchange bloquea CORS en tu navegador/red, esa fila mostrará “—”, pero las demás siguen.</li>
+      <li>Podés fijar el dólar manual arriba (campo USD→ARS) si el automático no carga en tu red.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+/* ===== Fondo “muro”: detección automática ===== */
+(function(){
+  const candidatas=['muro.jpg','muro.jpeg','muro.png','bg.jpg','bg.jpeg','bg.png'];
+  (function probar(i){
+    if(i>=candidatas.length) return;
+    const im=new Image();
+    im.onload=()=>{document.body.style.background=
+      `linear-gradient(180deg,var(--bg1),var(--bg2)), url('${candidatas[i]}') center/cover fixed no-repeat`;};
+    im.onerror=()=>probar(i+1);
+    im.src=candidatas[i]+'?v='+Date.now();
+  })(0);
+})();
+
+/* ===== Config ===== */
+// CAMBIÁ ESTA LISTA si querés otras: ej. ['BTC','ETH','VST'] si tu token es VST
+const COINS = ['BTC','ETH','USDT'];  // <- si querías VST, cambialo acá
+const EXCHANGES = ['Binance','Bitget','Bitstamp','Kraken','Coinbase'];
+const POLL_MS = 5000;
+
+const $ = (id)=>document.getElementById(id);
+const fmt = (n)=> (n==null||isNaN(n)) ? '—' :
+  Number(n).toLocaleString(undefined,{minimumFractionDigits:(Math.abs(n)>=100000?0:Math.abs(n)>=1000?2:4),maximumFractionDigits:(Math.abs(n)>=100000?0:Math.abs(n)>=1000?2:4)});
+
+let usdArs = null; // se autocompleta; editable por el usuario
+
+/* ===== UI base ===== */
+function buildUI(){
+  $('coinsLbl').textContent = COINS.join(', ');
+  const container = $('coins');
+  container.innerHTML = '';
+  for (const coin of COINS){
+    const box = document.createElement('section');
+    box.className='card';
+    box.innerHTML = `
+      <div class="row">
+        <strong style="font-size:18px">${coin}/USD & ${coin}/ARS</strong>
+        <span class="muted">Exchanges en vivo (REST)</span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Exchange</th><th>Par</th><th>USD</th><th>ARS</th><th>Estado</th></tr>
+        </thead>
+        <tbody id="tb-${coin}">
+          ${EXCHANGES.map(ex=>`
+          <tr>
+            <td><strong>${ex}</strong></td>
+            <td class="muted" id="${coin}-${ex}-pair">—</td>
+            <td class="price" id="${coin}-${ex}-usd">—</td>
+            <td class="price" id="${coin}-${ex}-ars">—</td>
+            <td class="muted" id="${coin}-${ex}-state">…</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+    container.appendChild(box);
+  }
+}
+buildUI();
+
+/* ===== USD→ARS automático con fallback manual ===== */
+async function loadUsdArs(){
+  try{
+    // Exchangerate.host suele permitir CORS
+    const r = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=ARS',{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    const rate = j && j.rates && j.rates.ARS ? parseFloat(j.rates.ARS) : null;
+    if(rate && !isNaN(rate)){ usdArs = rate; $('arsRate').placeholder = rate.toFixed(2); }
+  }catch(e){
+    // fallback 2
+    try{
+      const r2=await fetch('https://open.er-api.com/v6/latest/USD',{cache:'no-store'});
+      if(!r2.ok) throw new Error('HTTP '+r2.status);
+      const j2=await r2.json();
+      const rate = j2 && j2.rates && j2.rates.ARS ? parseFloat(j2.rates.ARS) : null;
+      if(rate && !isNaN(rate)){ usdArs = rate; $('arsRate').placeholder = rate.toFixed(2); }
+    }catch{}
+  }
+}
+$('applyRate').addEventListener('click', ()=>{
+  const v = parseFloat($('arsRate').value);
+  if(!isNaN(v) && v>0){ usdArs = v; }
+});
+
+/* ===== Fetchers por exchange (REST) ===== */
+async function fetchBinance(coin){
+  // Binance usa mayormente USDT: coinUSDT
+  const sym = (coin==='USDT') ? 'USDTUSD' : coin+'USDT'; // USDTUSD quizá no exista -> mostrará "—"
+  const url = `https://api.binance.com/api/v3/ticker/price?symbol=${sym}`;
+  const pairLbl = (coin==='USDT') ? 'USDT/USD?' : `${coin}/USDT`;
+  return fetchJSON(url).then(j=>{
+    const p = parseFloat(j.price);
+    return isFinite(p) ? {pair: pairLbl, usd: p} : null;
+  });
+}
+async function fetchBitget(coin){
+  const sym = (coin==='USDT') ? 'USDTUSD' : coin+'USDT';
+  const url = `https://api.bitget.com/api/v2/spot/market/ticker?symbol=${sym}`;
+  return fetchJSON(url).then(j=>{
+    let p=null;
+    if(j && j.data){
+      if (Array.isArray(j.data) && j.data[0]) p = parseFloat(j.data[0].last || j.data[0].price || j.data[0].close);
+      else if (j.data.tickers && j.data.tickers[0]) p = parseFloat(j.data.tickers[0].last || j.data.tickers[0].price || j.data.tickers[0].close);
+      else if (j.data.last || j.data.price || j.data.close) p = parseFloat(j.data.last || j.data.price || j.data.close);
+    }
+    return isFinite(p) ? {pair: (coin==='USDT'?'USDT/USD?':`${coin}/USDT`), usd: p} : null;
+  });
+}
+async function fetchBitstamp(coin){
+  // Bitstamp usa USD (no USDT). /api/v2/ticker/{base}usd
+  if (coin==='USDT') return null; // no sentido en USD
+  const url = `https://www.bitstamp.net/api/v2/ticker/${coin.toLowerCase()}usd`;
+  return fetchJSON(url).then(j=>{
+    const p = parseFloat(j.last || j.price);
+    return isFinite(p) ? {pair: `${coin}/USD`, usd: p} : null;
+  });
+}
+async function fetchKraken(coin){
+  // Kraken usa XBT para BTC. USD directo.
+  if (coin==='USDT') return null;
+  const base = (coin==='BTC') ? 'XBT' : coin;
+  const pair = `${base}USD`;
+  const url = `https://api.kraken.com/0/public/Ticker?pair=${pair}`;
+  return fetchJSON(url).then(j=>{
+    if(!j || !j.result) return null;
+    const key = Object.keys(j.result)[0];
+    const p = key && j.result[key] && j.result[key].c ? parseFloat(j.result[key].c[0]) : null;
+    return isFinite(p) ? {pair: `${base}/USD`, usd: p} : null;
+  });
+}
+async function fetchCoinbase(coin){
+  if (coin==='USDT') return null;
+  const url = `https://api.exchange.coinbase.com/products/${coin}-USD/ticker`;
+  return fetchJSON(url).then(j=>{
+    const p = parseFloat(j.price);
+    return isFinite(p) ? {pair: `${coin}/USD`, usd: p} : null;
+  });
+}
+
+async function fetchJSON(url){
+  const r = await fetch(url, {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j = await r.json();
+  return j;
+}
+
+/* ===== Ciclo de actualización ===== */
+async function updateAll(){
+  const ts = new Date();
+  $('lastTs').textContent = ts.toLocaleTimeString();
+
+  for (const coin of COINS){
+    await Promise.all(EXCHANGES.map(async (ex)=>{
+      const row = {
+        pairEl: $(`${coin}-${ex}-pair`),
+        usdEl:  $(`${coin}-${ex}-usd`),
+        arsEl:  $(`${coin}-${ex}-ars`),
+        stEl:   $(`${coin}-${ex}-state`)
+      };
+      row.stEl.textContent = '…';
+      row.stEl.className = 'muted';
+
+      try{
+        let data = null;
+        if (ex==='Binance')  data = await fetchBinance(coin);
+        if (ex==='Bitget')   data = await fetchBitget(coin);
+        if (ex==='Bitstamp') data = await fetchBitstamp(coin);
+        if (ex==='Kraken')   data = await fetchKraken(coin);
+        if (ex==='Coinbase') data = await fetchCoinbase(coin);
+
+        if (!data){
+          row.usdEl.textContent='—'; row.arsEl.textContent='—'; row.pairEl.textContent='—';
+          row.stEl.textContent='No disponible'; row.stEl.className='bad';
+          return;
+        }
+        row.pairEl.textContent = data.pair;
+        row.usdEl.textContent  = fmt(data.usd);
+        const rate = usdArs || parseFloat($('arsRate').value) || null;
+        if (rate){
+          row.arsEl.textContent = fmt(data.usd * rate);
+        } else {
+          row.arsEl.textContent = '—';
+        }
+        row.stEl.textContent='OK';
+        row.stEl.className='ok';
+      }catch(e){
+        row.usdEl.textContent='—'; row.arsEl.textContent='—'; row.pairEl.textContent='—';
+        row.stEl.textContent='ERROR'; row.stEl.className='bad';
+      }
+    }));
+  }
+}
+
+/* ===== Start ===== */
+(async function(){
+  buildUI();
+  await loadUsdArs();
+  updateAll();
+  setInterval(updateAll, POLL_MS);
+})();
+</script>
+</body>
+</html>
