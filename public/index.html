@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Arbolito — Cotizaciones</title>
+<style>
+  :root{
+    --text:#e5e7eb; --muted:#a1a1aa; --line:rgba(255,255,255,.08);
+    --cardBg:rgba(10,13,20,.84); --chipBg:rgba(255,255,255,.06);
+    --ok:#22c55e; --bad:#ef4444; --accent:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;
+    background:
+      url('Muro.jpg') center/cover fixed no-repeat,
+      url('public/Muro.jpg') center/cover fixed no-repeat,
+      #0b0f16;
+    overflow-x:hidden;
+  }
+  .page{max-width:480px;margin:0 auto;padding:12px}
+  h1{margin:6px 0 10px;font-size:18px;letter-spacing:.2px}
+  .card{background:var(--cardBg);border:1px solid var(--line);border-radius:14px;padding:10px}
+  .grid-dolar{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .dl-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .row{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-variant-numeric:tabular-nums}
+  .row span:first-child{color:var(--muted);font-size:12px}
+  .updated{margin-top:4px;font-size:11px;color:var(--muted)}
+  /* Tabs: blancos, gruesos y visibles sobre el fondo */
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .tab{
+    padding:11px 14px;border-radius:999px;background:#ffffff; color:#0b0f16;
+    border:1px solid #e5e7eb; font-size:14px; font-weight:700;
+    box-shadow:0 2px 6px rgba(0,0,0,.25);
+  }
+  .tab.active{
+    background:#f3f4f6; border-color:#cbd5e1; box-shadow:0 0 0 2px rgba(255,255,255,.25) inset;
+  }
+  .chip{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chipBg);border:1px solid var(--line);color:var(--muted)}
+  /* Tabla móvil */
+  table{width:100%;border-collapse:separate;border-spacing:0 6px}
+  th,td{padding:10px 10px;text-align:left}
+  th{font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+  tbody tr{background:var(--cardBg);border:1px solid var(--line)}
+  tbody td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+  tbody td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+  .price{font-variant-numeric:tabular-nums}
+  .green{color:var(--ok)} .red{color:var(--bad)}
+  .meta{margin:8px 2px 2px;color:var(--muted);font-size:11px}
+  .skeleton{
+    background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 37%,rgba(255,255,255,.04) 63%);
+    background-size:400% 100%;animation:sh 1.2s ease infinite;border-radius:10px
+  }
+  @keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+  a{color:var(--accent);text-decoration:none}
+  img,table,div,section{max-width:100%}
+</style>
+</head>
+<body>
+<div class="page">
+  <!-- DÓLAR -->
+  <section>
+    <h1>💱 Cotizaciones del Dólar (ARS)</h1>
+    <div id="dolares" class="grid-dolar">
+      <div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div>
+    </div>
+  </section>
+
+  <!-- PARES -->
+  <section style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0">🪙 Pares</h1>
+      <span id="apiStatus" class="chip">API: comprobando…</span>
+    </div>
+
+    <div id="tabs" class="tabs"></div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr><th>Exchange</th><th>Par</th><th>Compra</th><th>Venta</th><th>24h</th><th>Act.</th></tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="meta">Dólar por <a href="https://dolarapi.com" target="_blank" rel="noreferrer">dolarapi</a> (fallback: CriptoYa). Cripto por <a href="https://criptoya.com" target="_blank" rel="noreferrer">CriptoYa</a>.</div>
+  </section>
+</div>
+
+<script>
+/* ======= UTILIDADES ======= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const nfARS = new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:2});
+function fmtARS(n){ return (n==null||isNaN(n)) ? '—' : nfARS.format(n) }
+function fmtUSDT(n){ return (n==null||isNaN(n)) ? '—' : (new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' USDT') }
+function ago(ts){ if(!ts) return '—'; const d=new Date(ts); const s=(Date.now()-d)/1000;
+  if(s<60) return Math.floor(s)+'s'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d' }
+function setApi(ok,extra=''){ $('#apiStatus').textContent = `API: ${ok?'OK':'problemas'}${extra?` · ${extra}`:''}` }
+async function get(url){ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error(r.status); return r.json() }
+
+/* ======= DÓLAR ======= */
+const DOLLAR_KEYS = [
+  {id:'oficial', labels:['oficial']},
+  {id:'tarjeta', labels:['tarjeta','turista']},
+  {id:'blue',    labels:['blue']},
+  {id:'mep',     labels:['mep','bolsa']},
+  {id:'ccl',     labels:['ccl','contadoconliqui']},
+  {id:'cripto',  labels:['cripto']}
+];
+
+async function loadDolares(){
+  const wrap=$('#dolares'); wrap.innerHTML='';
+  let data={};
+  try{
+    const arr=await get('https://dolarapi.com/v1/dolares');
+    const by={}; for(const it of arr){ by[(it.casa||it.nombre||'').toLowerCase()]=it }
+    for(const {id,labels} of DOLLAR_KEYS){
+      for(const L of labels){ const it=by[L]; if(it){ data[id]={compra:it.compra,venta:it.venta,updated:it.fecha||new Date().toISOString()}; break; } }
+    }
+  }catch(_){}
+  try{
+    const cy=await get('https://criptoya.com/api/dolar');
+    const map={oficial:cy?.oficial, blue:cy?.blue, mep:cy?.mep, ccl:cy?.ccl, tarjeta:cy?.tarjeta||cy?.turista, cripto:cy?.cripto};
+    for(const k in map){ if(!data[k] && map[k]) data[k]={compra:map[k].compra,venta:map[k].venta,updated:map[k].fecha||new Date().toISOString()} }
+  }catch(_){}
+  const CARDS=[
+    {k:'oficial',t:'Oficial'},{k:'tarjeta',t:'Tarjeta'},{k:'blue',t:'Blue'},
+    {k:'mep',t:'MEP'},{k:'ccl',t:'CCL'},{k:'cripto',t:'Cripto'}
+  ];
+  for(const c of CARDS){
+    const v=data[c.k]||{};
+    const el=document.createElement('div');
+    el.className='card';
+    el.innerHTML=`
+      <div class="dl-title">DÓLAR ${c.t.toUpperCase()}</div>
+      <div class="row"><span>venta</span><strong>${fmtARS(v.venta)}</strong></div>
+      <div class="row"><span>compra</span><span>${fmtARS(v.compra)}</span></div>
+      <div class="updated">act: ${ago(v.updated)}</div>`;
+    wrap.appendChild(el);
+  }
+}
+
+/* ======= CRIPTO ======= */
+const PAIRS = ['USDT/ARS','USDC/ARS','DAI/USDT','BTC/USDT','ETH/USDT'];
+const EX_ARSK = ['letsbit','lemoncash','buenbit','ripio','argenbtc','fiwind','satoshitango'];
+const EX_USDT = ['binance','okx','bybit','kucoin','bingx','mexc'];
+const state = { pair: PAIRS[0] };
+
+function buildTabs(){
+  const c=$('#tabs'); c.innerHTML='';
+  PAIRS.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='tab'+(p===state.pair?' active':''); b.textContent=p;
+    b.onclick=()=>{ state.pair=p; $$('.tab').forEach(t=>t.classList.remove('active')); b.classList.add('active'); loadPair(); }
+    c.appendChild(b);
+  });
+}
+
+function cyUrl(ex, base, quote){ return `https://criptoya.com/api/${ex}/${base.toLowerCase()}/${quote.toLowerCase()}` }
+async function fetchCY(ex, base, quote){
+  const j = await get(cyUrl(ex,base,quote));
+  const ts = j?.time ? (typeof j.time==='number'? j.time*1000 : j.time) : Date.now();
+  return { bid:j?.bid ?? j?.totalBid ?? null, ask:j?.ask ?? j?.totalAsk ?? null, chg:j?.change24h ?? j?.change ?? null, ts };
+}
+
+/* === USDT con validación y fallback === */
+const CORS = 'https://cors.isomorphic-git.org/';
+function mustNumber(x){ if(typeof x!=='number'||!isFinite(x)) throw new Error('precio inválido'); return x; }
+
+async function fetchBinanceUSDT(base){
+  const sym=(base+'USDT').toUpperCase();
+  const j=await get(CORS+`https://api.binance.com/api/v3/ticker/bookTicker?symbol=${sym}`);
+  return { bid:mustNumber(+j.bidPrice), ask:mustNumber(+j.askPrice), chg:null, ts:Date.now() };
+}
+async function fetchOKXUSDT(base){
+  const sym=(base+'-USDT').toUpperCase();
+  const j=await get(CORS+`https://www.okx.com/api/v5/market/ticker?instId=${sym}`);
+  const d=j.data?.[0]||{};
+  return { bid:mustNumber(+d.bidPx), ask:mustNumber(+d.askPx), chg:null, ts:Date.now() };
+}
+async function fetchBybitUSDT(base){
+  const sym=(base+'USDT').toUpperCase();
+  const j=await get(CORS+`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${sym}`);
+  const d=j.result?.list?.[0]||{};
+  return { bid:mustNumber(+d.bid1Price), ask:mustNumber(+d.ask1Price), chg:null, ts:Date.now() };
+}
+async function fetchKucoinUSDT(base){
+  const sym=(base+'-USDT').toUpperCase();
+  const j=await get(CORS+`https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=${sym}`);
+  const d=j.data||{};
+  return { bid:mustNumber(+d.bestBid), ask:mustNumber(+d.bestAsk), chg:null, ts:Date.now() };
+}
+async function fetchBingxUSDT(base){
+  const sym=(base+'-USDT').toUpperCase();
+  const j=await get(CORS+`https://api-swap-rest.bingx.com/openApi/spot/v1/ticker/bookTicker?symbol=${sym}`);
+  const d=j.data||j||{};
+  return { bid:mustNumber(+(d.bidPrice||d.bestBid)), ask:mustNumber(+(d.askPrice||d.bestAsk)), chg:null, ts:Date.now() };
+}
+async function fetchMexcUSDT(base){
+  const sym=(base+'USDT').toUpperCase();
+  const j=await get(CORS+`https://api.mexc.com/api/v3/ticker/bookTicker?symbol=${sym}`);
+  return { bid:mustNumber(+j.bidPrice), ask:mustNumber(+j.askPrice), chg:null, ts:Date.now() };
+}
+
+async function fetchUSDTFromExchange(ex, base){
+  try{
+    switch(ex){
+      case 'binance': return await fetchBinanceUSDT(base);
+      case 'okx': return await fetchOKXUSDT(base);
+      case 'bybit': return await fetchBybitUSDT(base);
+      case 'kucoin': return await fetchKucoinUSDT(base);
+      case 'bingx': return await fetchBingxUSDT(base);
+      case 'mexc': return await fetchMexcUSDT(base);
+      default: throw new Error('ex no soportado');
+    }
+  }catch(_){
+    return await fetchCY(ex, base, 'USDT');
+  }
+}
+
+function renderRows(rows, quote){
+  const tb=$('#tbody'); tb.innerHTML='';
+  const fmt=quote==='ARS'?fmtARS:fmtUSDT;
+  for(const r of rows){
+    const ch=typeof r.chg==='number'?(r.chg>=0?`+${r.chg.toFixed(2)}%`:`${r.chg.toFixed(2)}%`):'—';
+    const chCls=typeof r.chg==='number'?(r.chg>=0?'green':'red'):'';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${r.exchange}</td>
+      <td><span class="chip">${r.par}</span></td>
+      <td class="price">${fmt(r.bid)}</td>
+      <td class="price">${fmt(r.ask)}</td>
+      <td class="${chCls}">${ch}</td>
+      <td>${ago(r.ts)}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+async function loadPair(){
+  const [base,quote]=state.pair.split('/');
+  const tb=$('#tbody');
+  tb.innerHTML=`
+    <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+    <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+    <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>`;
+  let ok=0, rows=[];
+  if(quote==='ARS'){
+    for(const ex of EX_ARSK){
+      try{const d=await fetchCY(ex,base,quote);rows.push({exchange:ex.toUpperCase(),par:`${base}/${quote}`,...d});ok++;}
+      catch(_){rows.push({exchange:ex.toUpperCase(),par:`${base}/${quote}`,bid:null,ask:null,chg:null,ts:null});}
+    }
+  }else{
+    for(const ex of EX_USDT){
+      try{
+        let d=await fetchUSDTFromExchange(ex,base);
+        if(!(typeof d.bid==='number'&&isFinite(d.bid)&&typeof d.ask==='number'&&isFinite(d.ask))){
+          d=await fetchCY(ex,base,'USDT');
+        }
+        if(typeof d.bid==='number'&&isFinite(d.bid)&&typeof d.ask==='number'&&isFinite(d.ask)) ok++;
+        rows.push({exchange:ex.toUpperCase(),par:`${base}/USDT`,...d});
+      }catch(_){
+       
