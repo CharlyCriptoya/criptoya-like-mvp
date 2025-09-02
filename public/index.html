@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cotizaciones Cripto + Dólar</title>
+  <style>
+    :root { --bg:#0b0f16; --card:#121827; --text:#e5e7eb; --muted:#94a3b8; --ok:#22c55e; --bad:#ef4444; --accent:#60a5fa; }
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial;
+      background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;background:linear-gradient(180deg,#0b0f16 70%,transparent);padding:14px 16px 8px;border-bottom:1px solid #1f2937}
+    h1{font-size:18px;margin:0 0 8px;letter-spacing:.3px}
+    .dolares, .grid {display:grid;gap:10px}
+    .dolares{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin:8px 0}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:12px;padding:12px}
+    .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+    .big{font-size:22px;font-weight:700;margin-top:4px}
+    .updated{font-size:12px;color:var(--muted);margin-top:6px}
+    main{padding:14px 16px 80px}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px}
+    .tab{border:1px solid #1f2937;background:#0f172a;color:var(--text);padding:8px 12px;border-radius:999px;cursor:pointer}
+    .tab.active{border-color:#334155;background:#111827;outline:2px solid #334155}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th,td{padding:10px 12px;text-align:left}
+    th{font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid #1f2937}
+    tbody tr{background:var(--card);border:1px solid #1f2937}
+    tbody td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+    tbody td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+    .pill{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid #1f2937;color:var(--muted)}
+    .price{font-variant-numeric:tabular-nums}
+    .green{color:var(--ok)} .red{color:var(--bad)}
+    footer{position:fixed;bottom:0;left:0;right:0;background:#0b1220;border-top:1px solid #1f2937;padding:10px 16px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;align-items:center}
+    .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:#f59e0b}
+    .ok{background:#22c55e} .fail{background:#ef4444}
+    .skeleton{background:linear-gradient(90deg,#0e1626 25%,#0f1a30 37%,#0e1626 63%);background-size:400% 100%;animation:sh 1.4s ease infinite}
+    @keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+    a{color:var(--accent);text-decoration:none}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>💱 Cotizaciones del Dólar (ARS)</h1>
+    <div id="dolares" class="dolares">
+      <!-- Tarjetas dólar: se rellenan por JS -->
+      <div class="card skeleton" style="height:84px"></div>
+      <div class="card skeleton" style="height:84px"></div>
+      <div class="card skeleton" style="height:84px"></div>
+      <div class="card skeleton" style="height:84px"></div>
+    </div>
+  </header>
+
+  <main>
+    <div style="display:flex;align-items:center;gap:10px">
+      <h1 style="margin:8px 0">🪙 Pares de Cripto en ARS</h1>
+      <span id="apiStatus" class="pill">API: comprobando…</span>
+    </div>
+
+    <div class="tabs" id="pairTabs">
+      <!-- Botones de pares: se rellenan por JS -->
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Exchange</th>
+            <th>Par</th>
+            <th>Compra</th>
+            <th>Venta</th>
+            <th>24h</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <!-- Filas: se rellenan por JS -->
+          <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <div><span id="healthDot" class="status-dot"></span><span id="healthText">Comprobando proveedores…</span></div>
+    <div>Fuente: <a href="https://criptoya.com" target="_blank" rel="noreferrer">CriptoYa</a> (y fallback público)</div>
+  </footer>
+
+<script>
+/* ========= CONFIG editable ========= */
+const DOLLAR_SOURCES = [
+  // 1) CriptoYa
+  { name: 'criptoya', url: 'https://criptoya.com/api/dolar' },
+  // 2) Fallback público (formato diferente)
+  { name: 'dolarapi', url: 'https://dolarapi.com/v1/dolares' }
+];
+
+// Pares a mostrar (botones):
+const PAIRS = ['USDT/ARS','USDC/ARS','DAI/ARS','BTC/ARS','ETH/ARS'];
+
+// Exchanges ARS comunes en Argentina que suele cubrir CriptoYa:
+const EXCHANGES = [
+  'letsbit', 'lemoncash', 'buenbit', 'ripio', 'argenbtc', 'fiwind', 'satoshitango'
+];
+
+// Endpoint builder para CriptoYa por exchange/par.
+// IMPORTANTE: si “antes” estabas usando otra ruta, sólo ajustá esta función.
+function criptoyaPairUrl(exchange, base, quote) {
+  // Ejemplo habitual en CriptoYa: /api/{exchange}/{base}/{quote}
+  return `https://criptoya.com/api/${exchange}/${base.toLowerCase()}/${quote.toLowerCase()}`;
+}
+
+/* ========= Utilidades ========= */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+function fmt(n, opts = {}) {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: opts.maxfd ?? 2 }).format(n);
+}
+function ago(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  const diff = (Date.now() - d.getTime())/1000;
+  if (diff < 60) return `${Math.floor(diff)}s`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h`;
+  return `${Math.floor(diff/86400)}d`;
+}
+function setHealth(ok, msg) {
+  const dot = $('#healthDot'); const tx = $('#healthText');
+  dot.classList.remove('ok','fail'); dot.classList.add(ok ? 'ok' : 'fail');
+  tx.textContent = msg;
+  $('#apiStatus').textContent = `API: ${ok ? 'OK' : 'con problemas'}`;
+}
+
+/* ========= Dólar ========= */
+async function loadDollars() {
+  const wrap = $('#dolares');
+  wrap.innerHTML = '';
+  let data = null, used = null;
+
+  // Intento 1: CriptoYa
+  for (const src of DOLLAR_SOURCES) {
+    try {
+      const r = await fetch(src.url, { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const json = await r.json();
+      data = { source: src.name, raw: json };
+      used = src.name;
+      break;
+    } catch (e) { /* probar el siguiente */ }
+  }
+
+  let cards = [];
+  if (used === 'criptoya' && data?.raw) {
+    // Formato típico esperado:
+    // { oficial: { compra, venta }, blue: {...}, mep: {...}, ccl: {...} }
+    const d = data.raw;
+    cards = [
+      { k:'oficial', t:'Oficial' },
+      { k:'blue', t:'Blue' },
+      { k:'mep', t:'MEP' },
+      { k:'ccl', t:'CCL' },
+    ].map(({k,t}) => {
+      const o = d[k] || {};
+      return { title:`Dólar ${t}`, compra:o.compra, venta:o.venta, updated: o.fecha || new Date().toISOString() };
+    });
+  } else if (used === 'dolarapi' && Array.isArray(data?.raw)) {
+    // dolarapi.com/v1/dolares -> array con { casa, compra, venta }
+    const byName = {};
+    for (const it of data.raw) byName[(it.casa||'').toLowerCase()] = it;
+    cards = [
+      { title:'Dólar Oficial', compra: byName['oficial']?.compra, venta: byName['oficial']?.venta, updated: new Date().toISOString() },
+      { title:'Dólar Blue', compra: byName['blue']?.compra, venta: byName['blue']?.venta, updated: new Date().toISOString() },
+      { title:'Dólar MEP', compra: byName['bolsa']?.compra, venta: byName['bolsa']?.venta, updated: new Date().toISOString() },
+      { title:'Dólar CCL', compra: byName['contadoconliqui']?.compra, venta: byName['contadoconliqui']?.venta, updated: new Date().toISOString() },
+    ];
+  } else {
+    // Fallback vacío
+    cards = [
+      { title:'Dólar Oficial', compra:null, venta:null, updated:null },
+      { title:'Dólar Blue', compra:null, venta:null, updated:null },
+      { title:'Dólar MEP', compra:null, venta:null, updated:null },
+      { title:'Dólar CCL', compra:null, venta:null, updated:null },
+    ];
+  }
+
+  for (const c of cards) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = `
+      <div class="label">${c.title}</div>
+      <div class="big">${fmt(c.venta)} <span class="pill">venta</span></div>
+      <div class="updated">compra: ${fmt(c.compra)} · act: ${ago(c.updated)}</div>
+    `;
+    wrap.appendChild(el);
+  }
+}
+
+/* ========= Cripto ========= */
+const state = { pair: 'USDT/ARS', rows: [] };
+
+function buildTabs() {
+  const c = $('#pairTabs');
+  c.innerHTML = '';
+  PAIRS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (p === state.pair ? ' active' : '');
+    b.textContent = p;
+    b.onclick = () => { state.pair = p; $$('.tab').forEach(t=>t.classList.remove('active')); b.classList.add('active'); loadPair(); };
+    c.appendChild(b);
+  });
+}
+
+async function fetchFromExchange(exchange, base, quote) {
+  const url = criptoyaPairUrl(exchange, base, quote);
+  const r = await fetch(url, { cache:'no-store' });
+  if (!r.ok) throw new Error(`${exchange} ${r.status}`);
+  // Esperado (común en CriptoYa): { totalAsk, totalBid, ask, bid, ultimo, time }
+  const j = await r.json();
+  return {
+    exchange,
+    par: `${base}/${quote}`,
+    compra: j?.bid ?? j?.totalBid ?? null,
+    venta:  j?.ask ?? j?.totalAsk ?? null,
+    cambio: j?.change24h ?? j?.change ?? null, // si existe
+    ts: j?.time ? (typeof j.time === 'number' ? j.time*1000 : j.time) : Date.now()
+  };
+}
+
+async function loadPair() {
+  const tbody = $('#tbody');
+  tbody.innerHTML = `
+    <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+    <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+    <tr><td colspan="6" class="skeleton" style="height:48px;border-radius:10px"></td></tr>
+  `;
+
+  const [base, quote] = state.pair.split('/');
+  let okCount = 0, rows = [];
+  for (const ex of EXCHANGES) {
+    try {
+      const row = await fetchFromExchange(ex, base, quote);
+      rows.push(row);
+      okCount++;
+    } catch (e) {
+      rows.push({ exchange: ex, par: `${base}/${quote}`, compra: null, venta: null, cambio: null, ts: null, error: true });
+    }
+  }
+  state.rows = rows;
+
+  setHealth(okCount > 0, okCount > 0 ? `Datos cargados de ${okCount}/${EXCHANGES.length} exchanges` : 'No se pudo obtener precios');
+
+  // Render
+  tbody.innerHTML = '';
+  for (const r of rows) {
+    const chg = (typeof r.cambio === 'number') ? r.cambio : null;
+    const chgTxt = (chg === null) ? '—' : (chg>0?`+${chg.toFixed(2)}%`:`${chg.toFixed(2)}%`);
+    const chgCls = chg === null ? '' : (chg>=0 ? 'green':'red');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.exchange?.toUpperCase?.() || r.exchange}</td>
+      <td><span class="pill">${r.par}</span></td>
+      <td class="price">${fmt(r.compra)}</td>
+      <td class="price">${fmt(r.venta)}</td>
+      <td class="${chgCls}">${chgTxt}</td>
+      <td>${ago(r.ts)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+/* ========= Init ========= */
+(async function init(){
+  buildTabs();
+  await loadDollars();
+  await loadPair();
+
+  // Auto-refresco suave cada 60s
+  setInterval(loadDollars, 60_000);
+  setInterval(loadPair, 60_000);
+})();
+</script>
+</body>
+</html>
