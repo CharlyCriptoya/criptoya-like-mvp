@@ -1,0 +1,79 @@
+<script>
+/* ======= UTILIDADES ======= */
+function $(s){return document.querySelector(s)}
+function $$(s){return Array.prototype.slice.call(document.querySelectorAll(s))}
+var nfARS=new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:2});
+function fmtARS(n){return (n==null||isNaN(n))?'—':nfARS.format(n)}
+function fmtUSDT(n){return (n==null||isNaN(n))?'—':(new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)+' USDT')}
+function ago(ts){
+  if(!ts) return '—';
+  var d=new Date(ts); var s=(Date.now()-d)/1000;
+  if(s<60) return Math.floor(s)+'s';
+  if(s<3600) return Math.floor(s/60)+'m';
+  if(s<86400) return Math.floor(s/3600)+'h';
+  return Math.floor(s/86400)+'d';
+}
+function setApi(ok,extra){ $('#apiStatus').textContent='API: '+(ok?'OK':'problemas')+(extra?(' · '+extra):'') }
+function get(url){ return fetch(url,{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); }) }
+
+/* ======= DÓLAR ======= */
+var DOLLAR_KEYS=[
+  {id:'oficial',labels:['oficial']},
+  {id:'tarjeta',labels:['tarjeta','turista']},
+  {id:'blue',labels:['blue']},
+  {id:'mep',labels:['mep','bolsa']},
+  {id:'ccl',labels:['ccl','contadoconliqui']},
+  {id:'cripto',labels:['cripto']}
+];
+
+async function loadDolares(){
+  var wrap=$('#dolares'); wrap.innerHTML='';
+  var data={};
+
+  try{
+    var arr=await get('https://dolarapi.com/v1/dolares');
+    var by={};
+    for(var i=0;i<arr.length;i++){
+      var it=arr[i]; var k=((it.casa||it.nombre)||'').toLowerCase();
+      if(k) by[k]=it;
+    }
+    for(var j=0;j<DOLLAR_KEYS.length;j++){
+      var meta=DOLLAR_KEYS[j];
+      for(var k2=0;k2<meta.labels.length;k2++){
+        var L=meta.labels[k2]; var it2=by[L];
+        if(it2){ data[meta.id]={compra:it2.compra,venta:it2.venta,updated:it2.fecha||new Date().toISOString()}; break; }
+      }
+    }
+  }catch(e){}
+
+  try{
+    var cy=await get('https://criptoya.com/api/dolar');
+    var map={
+      oficial: cy && cy.oficial,
+      blue:    cy && cy.blue,
+      mep:     cy && cy.mep,
+      ccl:     cy && cy.ccl,
+      tarjeta: (cy && (cy.tarjeta||cy.turista)),
+      cripto:  cy && cy.cripto
+    };
+    for(var k in map){
+      if(!data[k] && map[k]){
+        data[k]={compra:map[k].compra,venta:map[k].venta,updated:map[k].fecha||new Date().toISOString()};
+      }
+    }
+  }catch(e){}
+
+  var CARDS=[{k:'oficial',t:'Oficial'},{k:'tarjeta',t:'Tarjeta'},{k:'blue',t:'Blue'},{k:'mep',t:'MEP'},{k:'ccl',t:'CCL'},{k:'cripto',t:'Cripto'}];
+  for(var c=0;c<CARDS.length;c++){
+    var card=CARDS[c], v=(data[card.k]||{});
+    var el=document.createElement('div'); el.className='card';
+    el.innerHTML='<div class="dl-title">DÓLAR '+card.t.toUpperCase()+'</div>'
+      +'<div class="row"><span>venta</span><strong>'+fmtARS(v.venta)+'</strong></div>'
+      +'<div class="row"><span>compra</span><span>'+fmtARS(v.compra)+'</span></div>'
+      +'<div class="updated">act: '+ago(v.updated)+'</div>';
+    wrap.appendChild(el);
+  }
+}
+
+/* ======= CRIPTO ======= */
+/* Pares
