@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CriptoYA-like</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      padding: 1rem;
+    }
+    h2 { margin-top: 0; }
+    ul.quotes { list-style: none; padding: 0; margin: 0; }
+    .quote-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: .6rem .8rem; border-bottom: 1px solid #2a2a2a;
+    }
+    .quote-left { display: flex; align-items: center; gap: .6rem; }
+    .exch-logo { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; }
+    .exch-name { font-weight: 700; }
+    .quote-right { display: flex; flex-direction: column; align-items: flex-end; }
+    .price { font-weight: 800; }
+    .sub { opacity: .7; font-size: .9em; }
+
+    /* Colores especiales (mantengo los tuyos) */
+    .best-buy { color: #00c853; }  /* mejor para comprar (más barato) */
+    .best-sell { color: #d50000; } /* mejor para vender (más caro) */
+
+    /* Links de precio: que parezcan texto (no cambian tu diseño) */
+    .price-link, .price-link:visited {
+      color: inherit; text-decoration: none;
+    }
+    .price-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h2>USDT/ARS</h2>
+  <ul id="quotes-list" class="quotes"></ul>
+
+  <script>
+    const norm = s => String(s || '').toLowerCase().replace(/\s+/g,'').trim();
+    const FALLBACK_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/3/3f/Placeholder_view_vector.svg';
+
+    // Bloqueo exchanges que no queremos mostrar (e.g., ArgenBTC y variantes)
+    const BLOCKLIST = new Set([
+      'argenbtc','argen-btc','argen bt c','argenbtcexchange','argen btc exchange','argen-btcexchange'
+    ]);
+
+    // Logos (podés sumar más)
+    const LOGOS = {
+      ripio: "https://cryptologos.cc/logos/ripio-logo.png",
+      satoshitango: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+      lemoncash: "https://seeklogo.com/images/L/lemon-cash-logo-0C3D8E1E3E-seeklogo.com.png",
+      buenbit: "https://pbs.twimg.com/profile_images/1564998121880360960/LqR37f-v_400x400.jpg",
+      letsbit: "https://pbs.twimg.com/profile_images/1697329473060747264/S9WnC6bE_400x400.jpg",
+      fiwind: "https://upload.wikimedia.org/wikipedia/commons/3/3f/Placeholder_view_vector.svg",
+      binance: "https://cryptologos.cc/logos/binance-coin-bnb-logo.png"
+    };
+
+    // URLs del exchange (home o sección principal). Si falta, se usa Google Search como fallback.
+    const EXCHANGE_URLS = {
+      ripio: "https://www.ripio.com/",
+      satoshitango: "https://www.satoshitango.com/",
+      lemoncash: "https://www.lemon.me/",
+      buenbit: "https://www.buenbit.com/",
+      letsbit: "https://www.letsbit.io/",
+      fiwind: "https://fiwind.com/",       // si no es exacta, cambia acá
+      binance: "https://www.binance.com/"
+    };
+
+    // helper: arma el link de destino para un exchange
+    function getExchangeLink(exchange, pairText="USDT ARS") {
+      const key = norm(exchange);
+      if (EXCHANGE_URLS[key]) return EXCHANGE_URLS[key];
+      // Fallback: búsqueda en Google del exchange + par
+      const q = encodeURIComponent(`${exchange} ${pairText}`);
+      return `https://www.google.com/search?q=${q}`;
+    }
+
+    function renderQuotes(quotes) {
+      const list = document.getElementById("quotes-list");
+      list.innerHTML = "";
+
+      // filtro de exchanges bloqueados
+      quotes = quotes.filter(q => !BLOCKLIST.has(norm(q.exchange)));
+
+      if (!quotes.length) {
+        list.innerHTML = "<li>No hay cotizaciones</li>";
+        return;
+      }
+
+      // calcular mejor compra (más barato) y mejor venta (más caro)
+      const bestBuy = Math.min(...quotes.map(q => q.buy));
+      const bestSell = Math.max(...quotes.map(q => q.sell));
+
+      quotes.forEach(q => {
+        const li = document.createElement("li");
+        li.className = "quote-row";
+
+        const buyClass = q.buy === bestBuy ? "best-buy" : "";
+        const sellClass = q.sell === bestSell ? "best-sell" : "";
+
+        const logo = LOGOS[norm(q.exchange)] || FALLBACK_LOGO;
+        const url  = getExchangeLink(q.exchange, "USDT ARS");
+
+        li.innerHTML = `
+          <div class="quote-left">
+            <img class="exch-logo" src="${logo}" alt="">
+            <span class="exch-name">${q.exchange}</span>
+          </div>
+          <div class="quote-right">
+            <a class="price price-link ${buyClass}" href="${url}" target="_blank" rel="noopener" title="Ir a ${q.exchange} (compra)">
+              $ ${q.buy.toFixed(2)}
+            </a>
+            <a class="sub price-link ${sellClass}" href="${url}" target="_blank" rel="noopener" title="Ir a ${q.exchange} (venta)">
+              $ ${q.sell.toFixed(2)}
+            </a>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    // 🔧 Datos de ejemplo (reemplazá por tu fetch real a CriptoYA)
+    const ejemplo = [
+      {exchange: "Ripio",        buy: 1395, sell: 1363},
+      {exchange: "SatoshiTango", buy: 1397, sell: 1371},
+      {exchange: "LemonCash",    buy: 1404, sell: 1343},
+      {exchange: "Buenbit",      buy: 1386, sell: 1364},
+      {exchange: "LetsBit",      buy: 1379, sell: 1351},
+      {exchange: "Binance",      buy: 1380, sell: 1364},
+      {exchange: "fiwind",     buy: 1000, sell: 900} // ← será filtrado
+    ];
+    renderQuotes(ejemplo);
+  </script>
+</body>
+</html>
