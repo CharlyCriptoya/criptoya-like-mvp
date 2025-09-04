@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#0b0f16"/>
+<title>Arbolito — Cotizaciones</title>
+<style>
+  :root{--text:#e5e7eb;--muted:#a1a1aa;--line:rgba(255,255,255,.08);--cardBg:rgba(10,13,20,.84);
+        --chipBg:rgba(255,255,255,.06);--ok:#22c55e;--bad:#ef4444;--accent:#60a5fa}
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;
+       background:url('Muro.jpg') center/cover fixed no-repeat, url('public/Muro.jpg') center/cover fixed no-repeat, #0b0f16;overflow-x:hidden}
+  .page{max-width:480px;margin:0 auto;padding:12px}
+  h1{margin:6px 0 10px;font-size:18px;letter-spacing:.2px}
+  .card{background:var(--cardBg);border:1px solid var(--line);border-radius:14px;padding:10px}
+  .grid-dolar{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .dl-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .row{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-variant-numeric:tabular-nums}
+  .row span:first-child{color:var(--muted);font-size:12px}
+  .updated{margin-top:4px;font-size:11px;color:var(--muted)}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .tab{padding:11px 14px;border-radius:999px;background:#fff;color:#0b0f16;border:1px solid #e5e7eb;font-size:14px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+  .tab.active{background:#f3f4f6;border-color:#cbd5e1;box-shadow:0 0 0 2px rgba(255,255,255,.25) inset}
+  .chip{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--chipBg);border:1px solid var(--line);color:var(--muted)}
+  table{width:100%;border-collapse:separate;border-spacing:0 6px}
+  th,td{padding:10px 10px;text-align:left} th{font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+  tbody tr{background:var(--cardBg);border:1px solid var(--line)}
+  tbody td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+  tbody td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+  .price{font-variant-numeric:tabular-nums}.green{color:var(--ok)}.red{color:var(--bad)}
+  .meta{margin:8px 2px 2px;color:var(--muted);font-size:11px}
+  .skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 37%,rgba(255,255,255,.04) 63%);
+           background-size:400% 100%;animation:sh 1.2s ease infinite;border-radius:10px}
+  @keyframes sh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+  a{color:var(--accent);text-decoration:none}
+
+  /* ——— Widget de gráficos & IA ——— */
+  .ai-wrap{margin-top:12px}
+  .ai-grid{display:flex;flex-direction:column;min-height:100svh} /* full screen */
+  .ai-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .ai-toolbar input,.ai-toolbar select{background:rgba(255,255,255,.08);border:1px solid var(--line);color:var(--text);padding:8px 10px;border-radius:10px}
+  .btn{padding:9px 12px;border:1px solid var(--line);background:var(--chipBg);color:var(--text);border-radius:10px;cursor:pointer}
+  .btn.primary{background:#fff;color:#111;border-color:#e5e7eb;font-weight:700}
+  #chart{height:calc(100svh - 180px);min-height:400px} /* ocupa la pantalla debajo de la toolbar */
+  .note{font-size:11px;color:var(--muted);margin-top:6px}
+  .coin{width:16px;height:16px;vertical-align:-3px;border-radius:999px;margin-right:6px;background:#111;object-fit:cover}
+  .badge{font-size:10px;padding:2px 6px;border-radius:999px;border:1px solid var(--line);background:var(--chipBg);margin-left:6px}
+  .ai-out{white-space:pre-wrap;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;margin-top:8px;flex:1;overflow:auto}
+  /* iOS mejora (opcional): usar 100dvh si está disponible */
+  @supports (height: 100dvh){
+    .ai-grid{min-height:100dvh}
+    #chart{height:calc(100dvh - 180px)}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <section>
+    <h1>💱 Cotizaciones del Dólar (ARS)</h1>
+    <div id="dolares" class="grid-dolar">
+      <div class="card skeleton" style="height:70px"></div><div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div><div class="card skeleton" style="height:70px"></div>
+      <div class="card skeleton" style="height:70px"></div><div class="card skeleton" style="height:70px"></div>
+    </div>
+  </section>
+
+  <section style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h1 style="margin:0">🪙 Pares</h1>
+      <span id="apiStatus" class="chip">API: comprobando…</span>
+    </div>
+    <div id="tabs" class="tabs"></div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Exchange</th><th>Par</th><th>Compra</th><th>Venta</th><th>24h</th><th>Act.</th></tr></thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+          <tr><td colspan="6" class="skeleton" style="height:46px"></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="meta">Dólar por <a href="https://dolarapi.com" target="_blank">dolarapi</a>. Cripto por <a href="https://criptoya.com" target="_blank">CriptoYa</a> y APIs oficiales (con fallback).</div>
+  </section>
+
+  <!-- ——— WIDGET NUEVO: Gráfico + IA ——— -->
+  <section class="ai-wrap">
+    <h1 style="margin:0 0 6px">📈 Gráfico & 🤖 Análisis</h1>
+    <div class="card">
+      <div class="ai-grid">
+        <div>
+          <div class="ai-toolbar">
+            <select id="wgExchange">
+              <option value="binance">Binance</option>
+              <option value="okx">OKX</option>
+              <option value="bybit">Bybit</option>
+              <option value="kucoin">KuCoin</option>
+              <option value="mexc">MEXC</option>
+              <option value="bingx">BingX</option>
+            </select>
+            <input id="wgBase" placeholder="BTC, ETH, SOL…" size="8"/>
+            <select id="wgQuote">
+              <option value="USDT">USDT</option>
+            </select>
+            <select id="wgTF">
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="1h">1h</option>
+            </select>
+            <button class="btn primary" id="btnLoad">Cargar gráfico</button>
+            <button class="btn" id="btnDownload">Descargar PNG</button>
+          </div>
+          <div id="chart"></div>
+          <div class="note">Tip: el Exchange del gráfico es el que elijas arriba. En la tabla de “Pares”, el nombre del exchange abre su página de trading del par.</div>
+        </div>
+        <div>
+          <div class="ai-toolbar">
+            <input id="openaiKey" placeholder="Tu OpenAI API Key (sk-…)" style="flex:1;min-width:220px"/>
+            <button class="btn" id="btnSaveKey">Guardar clave</button>
+          </div>
+          <button class="btn primary" id="btnAI">Analizar con IA</button>
+          <span class="badge" id="autoSigToggle" role="switch" aria-checked="false" style="cursor:pointer">Auto-señales: OFF</span>
+          <div class="ai-out" id="aiOut">Cargá un gráfico y opcionalmente pegá tu clave de OpenAI para obtener un análisis. Las auto-señales usan EMA20/EMA50 y RSI14 locales (no IA).</div>
+          <div class="note">⚠️ No es asesoramiento financiero. Usá gestión de riesgo.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- Librería de gráficos (canvas) -->
+<script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+
+<script>
+/* ===== Utilidades ===== */
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const nfARS=new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:2});
+const nfUS=new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtARS=n=> (n==null||isNaN(n))?'—':nfARS.format(n);
+const fmtUSDT=n=> (n==null||isNaN(n))?'—':nfUS.format(n)+' USDT';
+function ago(ts){ if(!ts) return '—'; const d=new Date(ts); const s=(Date.now()-d)/1000;
+  if(s<60) return Math.floor(s)+'s'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d' }
+function setApi(ok,extra=''){ $('#apiStatus').textContent=`API: ${ok?'OK':'problemas'}${extra?` · ${extra}`:''}` }
+
+/* ===== Fetch robusto: directo → 3 proxys ===== */
+const FETCH_TIMEOUT_MS=8000;
+async function get(url){
+  const tryFetch=async(u,opts={})=>{
+    const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort('timeout'),FETCH_TIMEOUT_MS);
+    try{ const r=await fetch(u,{cache:'no-store',mode:'cors',signal:ctrl.signal,...opts}); if(r.ok) return await r.text(); throw new Error('status '+r.status); }
+    finally{ clearTimeout(to); }
+  };
+  try{ return JSON.parse(await tryFetch(url)); }catch(_){}
+  try{ return JSON.parse(await tryFetch('https://api.allorigins.win/raw?url='+encodeURIComponent(url))); }catch(_){}
+  try{ return JSON.parse(await tryFetch('https://thingproxy.freeboard.io/fetch/'+url)); }catch(_){}
+  return JSON.parse(await tryFetch('https://cors.isomorphic-git.org/'+url));
+}
+
+/* ===== Dólar ===== */
+const DOLLAR_KEYS=[
+  {id:'oficial',labels:['oficial']},{id:'tarjeta',labels:['tarjeta','turista']},
+  {id:'blue',labels:['blue']},{id:'mep',labels:['mep','bolsa']},
+  {id:'ccl',labels:['ccl','contadoconliqui']},{id:'cripto',labels:['cripto']}
+];
+
+async function loadDolares(){
+  const wrap=$('#dolares'); wrap.innerHTML='';
+  let data={};
+  try{
+    const arr=await get('https://dolarapi.com/v1/dolares');
+    const by={}; for(const it of arr){ by[(it.casa||it.nombre||'').toLowerCase()]=it }
+    for(const {id,labels} of DOLLAR_KEYS){
+      for(const L of labels){ const it=by[L]; if(it){ data[id]={compra:it.compra,venta:it.venta,updated:it.fecha||new Date().toISOString()}; break; } }
+    }
+  }catch(_){}
+  try{
+    const cy=await get('https://criptoya.com/api/dolar');
+    const map={oficial:cy?.oficial,blue:cy?.blue,mep:cy?.mep,ccl:cy?.ccl,tarjeta:cy?.tarjeta||cy?.turista,cripto:cy?.cripto};
+    for(const k in map){ if(!data[k]&&map[k]) data[k]={compra:map[k].compra,venta:map[k].venta,updated:map[k].fecha||new Date().toISOString()} }
+  }catch(_){}
+  const CARDS=[{k:'oficial',t:'Oficial'},{k:'tarjeta',t:'Tarjeta'},{k:'blue',t:'Blue'},{k:'mep',t:'MEP'},{k:'ccl',t:'CCL'},{k:'cripto',t:'Cripto'}];
+  for(const c of CARDS){
+    const v=data[c.k]||{}; const el=document.createElement('div'); el.className='card';
+    el.innerHTML=`<div class="dl-title">DÓLAR ${c.t.toUpperCase()}</div
