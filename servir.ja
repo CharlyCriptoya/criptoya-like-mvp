@@ -1,0 +1,109 @@
+// server.js
+import express from "express";
+import fetch from "node-fetch";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+
+// --- util: fetch con timeout + reintentos + caché en memoria ---
+const cache = new Map(); // key -> { exp, data }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fetchJSON(url, { timeoutMs = 8000, retries = 2, cacheSec = 30 } = {}) {
+  const now = Date.now();
+  const ckey = `${url}`;
+  const hit = cache.get(ckey);
+  if (hit && hit.exp > now) return hit.data;
+
+  for (let a = 0; a <= retries; a++) {
+    try {
+      const ctrl = new AbortController();
+      const id = setTimeout(() => ctrl.abort(), timeoutMs);
+      const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "criptoya-like/1.0" } });
+      clearTimeout(id);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      cache.set(ckey, { exp: now + cacheSec * 1000, data });
+      return data;
+    } catch (e) {
+      if (a === retries) throw e;
+      await sleep(500 * (a + 1));
+    }
+  }
+}
+
+// --- middlewares ---
+app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  next();
+});
+
+// --- healthcheck ---
+app.get("/healthz", (req, res) => res.status(200).send("ok"));
+
+// --- APIs PROXY ---
+// Dólar (dolarapi)
+app.get("/api/dolar", async (req, res) => {
+  try {
+    const data = await fetchJSON("https://dolarapi.com/v1/dolares", { cacheSec: 60 });
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: "dolarapi_failed", detail: String(e) });
+  }
+});
+
+// Binance: ticker 24h para un símbolo (ej: BTCUSDT)
+app.get("/api/binance/ticker", async (req, res) => {
+  try {
+    const symbol = (req.query.symbol || "BTCUSDT").toUpperCase();
+    const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`;
+    const data = await fetchJSON(url, { cacheSec: 20 });
+    res.json({
+      symbol: data.symbol,
+      last: Number(data.lastPrice),
+      high24h: Number(data.highPrice),
+      low24h: Number(data.lowPrice),
+      priceChangePercent: Number(data.priceChangePercent),
+      volume: Number(data.volume),
+      quoteVolume: Number(data.quoteVolume),
+      closeTime: data.closeTime
+    });
+  } catch (e) {
+    res.status(502).json({ error: "binance_failed", detail: String(e) });
+  }
+});
+
+// Binance: klines para graficar (interval param: 1m,5m,15m,1h,4h,1d)
+app.get("/api/binance/klines", async (req, res) => {
+  try {
+    const symbol = (req.query.symbol || "BTCUSDT").toUpperCase();
+    const interval = (req.query.interval || "1m");
+    const limit = Math.min(Number(req.query.limit || 300), 1000);
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const raw = await fetchJSON(url, { cacheSec: 20 });
+    // mapeo simple: [openTime, open, high, low, close, volume]
+    const klines = raw.map(k => ({
+      t: k[0],
+      o: Number(k[1]),
+      h: Number(k[2]),
+      l: Number(k[3]),
+      c: Number(k[4]),
+      v: Number(k[5])
+    }));
+    res.json(klines);
+  } catch (e) {
+    res.status(502).json({ error: "klines_failed", detail: String(e) });
+  }
+});
+
+// --- estáticos ---
+app.use(express.static(path.join(__dirname, "public"))); // index.html en /public
+
+// --- arranque ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ Server on :${PORT}`));
