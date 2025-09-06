@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Charly Cripto • MVP</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<style>
+  :root{--bg:#0e0f13;--card:#151821;--mut:#9aa3b2;--line:#232833;--txt:#e8ecf1}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
+  a{color:#9ecbff}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  h1{margin:0 0 10px;font-size:22px}
+  .section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+  .mut{color:var(--mut)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#0f1218;border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:160px}
+  .chip b{display:block}
+  .pair-grid{display:grid;gap:12px}
+  @media(min-width:900px){.pair-grid{grid-template-columns:1fr 1fr}}
+  .pair-card{background:#0f1218;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .pair-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px}
+  select,button,textarea,input{background:#0f1218;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+  button{cursor:pointer}
+  .xcell{display:flex;align-items:center;gap:8px}
+  .xcell img.logo{width:18px;height:18px;object-fit:contain;border-radius:4px;flex:0 0 18px}
+  .priceStack{display:flex;flex-direction:column;align-items:end;line-height:1.15}
+  .priceUSD{color:#9aa3b2;font-size:12px}
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="logo.png" alt="Logo" style="height:40px;border-radius:8px" onerror="this.style.display='none'">
+      <h1 style="margin:0">Charly Cripto • MVP</h1>
+    </div>
+    <div class="mut">Dólar por <a href="https://dolarapi.com" target="_blank">dolarapi</a> • Cripto por Binance y <a href="https://criptoya.com" target="_blank">CriptoYa</a> (vía backend).</div>
+
+    <!-- DÓLAR -->
+    <section class="section">
+      <div id="cards-dolar" class="chips">Cargando dólar…</div>
+    </section>
+
+    <!-- /USDT -->
+    <section class="section">
+      <h2 style="margin:0 0 8px">Pares /USDT por exchange</h2>
+      <div class="mut" id="usdt-status">API: comprobando…</div>
+      <div class="pair-grid" id="usdtPairs"></div>
+    </section>
+
+    <!-- ARS locales (pendiente de endpoint específico) -->
+    <section class="section">
+      <h2 style="margin:0 0 8px">Pares por exchange (ARS)</h2>
+      <div class="mut" id="pares-status">API: no implementado aún</div>
+      <div class="pair-grid" id="pairs"></div>
+    </section>
+
+    <!-- GRÁFICO -->
+    <section class="section" id="ai-block">
+      <h2 style="margin:0 0 8px">📉 Gráfico + IA</h2>
+      <div class="controls">
+        <select id="sym">
+          <option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option>
+          <option>BNBUSDT</option><option>ADAUSDT</option><option>XRPUSDT</option>
+          <option>DOGEUSDT</option><option>MATICUSDT</option><option>LINKUSDT</option>
+          <option>TONUSDT</option>
+        </select>
+        <select id="tf">
+          <option value="15m">15m</option><option value="1h" selected>1h</option>
+          <option value="4h">4h</option><option value="1d">1d</option>
+        </select>
+        <button id="btnLoad">Cargar gráfico</button>
+      </div>
+      <div id="chartWrap" style="height:360px;background:#0f1115;border-radius:12px;position:relative">
+        <div id="chartContainer" style="width:100%;height:100%"></div>
+      </div>
+    </section>
+  </main>
+
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const fmt = (n,d=2)=> Number(n).toLocaleString('es-AR',{maximumFractionDigits:d});
+const fmtARS = new Intl.NumberFormat('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits:0 });
+const fmtUSD = new Intl.NumberFormat('en-US', { style:'currency', currency:'USD' });
+
+// ===== DÓLAR =====
+async function cargarDolar(){
+  try{
+    const d = await (await fetch('/api/dolar', {cache:'no-store'})).json();
+    $('#cards-dolar').innerHTML = d.map(row=>{
+      const nombre = (row.casa || row.nombre || 'DÓLAR').toUpperCase();
+      return `<div class="chip"><b>${nombre}</b>
+                <div class="mut">venta <b style="color:#fff">${fmtARS.format(row.venta||0)}</b></div>
+                <div class="mut">compra <b style="color:#fff">${fmtARS.format(row.compra||0)}</b></div>
+              </div>`;
+    }).join('') || '<div class="mut">Sin datos</div>';
+  }catch(e){
+    $('#cards-dolar').innerHTML = '<div class="mut">No se pudo cargar el dólar.</div>';
+  }
+}
+
+// ===== PRECIOS /USDT (ARS grande + USD abajo) =====
+async function cargarPreciosUSDT(symbol='BTCUSDT'){
+  try{
+    $('#usdt-status').textContent = 'API: cargando…';
+    const r = await fetch(`/api/precios?symbol=${symbol}`, {cache:'no-store'});
+    const { rows, usdars } = await r.json();
+
+    const html = (rows||[]).map(row=>{
+      if (row.error) return '';
+      const ex = row.exchange || '—';
+      const pair = row.pair || symbol;
+      const ars = row.bid_ars != null ? fmtARS.format(row.bid_ars) : '—';
+      const usd = row.bid_usd != null ? fmtUSD.format(row.bid_usd) : '—';
+      return `<div class="pair-card">
+        <div class="pair-title">
+          <div class="xcell"><span style="color:#9ecbff;font-weight:700">${ex}</span></div>
+          <div class="priceStack">
+            <span>${ars}</span>
+            <span class="priceUSD">${usd} / USDT</span>
+          </div>
+        </div>
+        <div class="mut">${pair}</div>
+      </div>`;
+    }).join('');
+    $('#usdtPairs').innerHTML = html || '<div class="mut">Sin datos</div>';
+    $('#usdt-status').textContent = `USDARS ref: ${usdars ? fmt(usdars,2) : '—'}`;
+  }catch(e){
+    console.error(e);
+    $('#usdt-status').textContent = 'API: error';
+    $('#usdtPairs').innerHTML = '<div class="mut">No se pudieron cargar los precios.</div>';
+  }
+}
+
+// ===== GRÁFICO =====
+let chart, series;
+function initChart(){
+  const el = document.getElementById('chartContainer');
+  chart = LightweightCharts.createChart(el,{
+    layout:{background:{color:'#0f1115'},textColor:'#DDD'},
+    grid:{vertLines:{color:'#222'},horzLines:{color:'#222'}},
+    timeScale:{borderColor:'#444'},
+    rightPriceScale:{borderColor:'#444'}
+  });
+  series = chart.addCandlestickSeries();
+}
+async function loadChart(symbol='BTCUSDT', interval='1h'){
+  if(!chart) initChart();
+  try{
+    const r = await fetch(`/api/candles?symbol=${symbol}&interval=${interval}`, {cache:'no-store'});
+    const rows = await r.json();
+    const data = rows.map(c=>({time:c.t/1000, open:+c.o, high:+c.h, low:+c.l, close:+c.c}));
+    series.setData(data);
+  }catch(e){
+    console.error(e);
+    document.getElementById('chartContainer').innerHTML = '<div style="color:#f66;padding:10px">No se pudo cargar el gráfico.</div>';
+  }
+}
+document.getElementById('btnLoad').addEventListener('click',()=>{
+  const s = document.getElementById('sym').value;
+  const tf = document.getElementById('tf').value;
+  loadChart(s, tf);
+});
+window.addEventListener('resize',()=> chart && chart.resize());
+
+// ===== INICIO =====
+(async function init(){
+  cargarDolar();
+  cargarPreciosUSDT('BTCUSDT');
+  // opcional: precargar gráfico
+  // loadChart('BTCUSDT','1h');
+  setInterval(()=> cargarPreciosUSDT(document.getElementById('sym')?.value || 'BTCUSDT'), 30000);
+})();
+</script>
+</body>
+</html>
