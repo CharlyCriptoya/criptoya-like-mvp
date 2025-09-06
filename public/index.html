@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Charly Cripto • MVP</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<style>
+  :root{--bg:#0e0f13;--card:#151821;--mut:#9aa3b2;--line:#232833;--txt:#e8ecf1}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
+  a{color:#9ecbff}
+  .wrap{max-width:1100px;margin:0 auto;padding:16px}
+  h1{margin:0 0 10px;font-size:22px}
+  .section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+  .mut{color:var(--mut)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:#0f1218;border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:160px}
+  .chip b{display:block}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px;border-bottom:1px solid var(--line);font-size:14px;text-align:left;vertical-align:top}
+  th{font-weight:700}
+  .right{text-align:right}
+  .pair-grid{display:grid;gap:12px}
+  @media(min-width:900px){.pair-grid{grid-template-columns:1fr 1fr}}
+  .pair-card{background:#0f1218;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .pair-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 10px}
+  select,button,textarea,input{background:#0f1218;color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+  button{cursor:pointer}
+  /* logos + stack precios */
+  .xcell{display:flex;align-items:center;gap:8px}
+  .xcell img.logo{width:18px;height:18px;object-fit:contain;border-radius:4px;flex:0 0 18px}
+  .priceStack{display:flex;flex-direction:column;align-items:end;line-height:1.15}
+  .priceUSD{color:#9aa3b2;font-size:12px}
+</style>
+</head>
+<body>
+  <main class="wrap">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="logo.png" alt="Logo" style="height:40px;border-radius:8px" onerror="this.style.display='none'">
+      <h1 style="margin:0">Charly Cripto • MVP</h1>
+    </div>
+    <div class="mut">Dólar por <a href="https://dolarapi.com" target="_blank">dolarapi</a> • Cripto por Binance y <a href="https://criptoya.com" target="_blank">CriptoYa</a> (vía backend).</div>
+
+    <!-- DÓLAR -->
+    <section class="section">
+      <div id="cards-dolar" class="chips">Cargando dólar…</div>
+    </section>
+
+    <!-- /USDT CriptoYa: ARS arriba, USD abajo + incluir P2P (suma) -->
+    <section class="section">
+      <h2 style="margin:0 0 8px">Pares /USDT por exchange (CriptoYa)</h2>
+      <div class="mut" id="usdt-status">API: comprobando…</div>
+      <div class="controls" style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="includeP2P">
+          <span>Incluir P2P (sumar a exchanges)</span>
+        </label>
+      </div>
+      <div class="pair-grid" id="usdtPairs"></div>
+    </section>
+
+    <!-- ARS locales (BTC/ARS, ETH/ARS, SOL/ARS): USD abajo estimado por promedio USDT/ARS -->
+    <section class="section">
+      <h2 style="margin:0 0 8px">Pares por exchange (ARS)</h2>
+      <div class="mut" id="pares-status">API: comprobando…</div>
+      <div class="pair-grid" id="pairs"></div>
+    </section>
+
+    <!-- GRÁFICO + IA -->
+    <section class="section" id="ai-block">
+      <h2 style="margin:0 0 8px">📉 Gráfico + IA</h2>
+      <div class="controls">
+        <select id="sym">
+          <option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option>
+          <option>BNBUSDT</option><option>ADAUSDT</option><option>XRPUSDT</option>
+          <option>DOGEUSDT</option><option>MATICUSDT</option><option>LINKUSDT</option>
+          <option>TONUSDT</option>
+        </select>
+        <select id="tf">
+          <option value="15m">15m</option><option value="1h" selected>1h</option>
+          <option value="4h">4h</option><option value="1d">1d</option>
+        </select>
+        <button id="btnLoad">Cargar gráfico</button>
+        <button id="btnFull">Análisis técnico completo</button>
+        <button id="btnPNG">Descargar PNG</button>
+      </div>
+
+      <div id="chartWrap" style="height:360px;background:#0f1115;border-radius:12px"></div>
+
+      <div class="section" style="margin-top:12px">
+        <h3 style="margin:0 0 8px;font-size:16px">🤏 Señal rápida (referencia)</h3>
+        <div id="signalText" class="mut">—</div>
+      </div>
+
+      <div class="section" style="margin-top:12px">
+        <h3 style="margin:0 0 8px;font-size:16px">🧪 Resumen de indicadores</h3>
+        <div id="atText" class="mut">—</div>
+      </div>
+
+      <div class="section" style="margin-top:12px">
+        <h3 style="margin:0 0 8px;font-size:16px">🧠 Informe (local o GPT si hay backend)</h3>
+        <div class="mut" style="margin-bottom:8px">Si existe <code>/api/ai/analyze</code>, se usa; si no, se genera local con indicadores + S/R.</div>
+        <div class="controls">
+          <input id="risk" type="number" step="0.5" min="0" max="100" placeholder="% riesgo por trade (ej. 1)" style="width:220px">
+          <select id="sidePref">
+            <option value="auto" selected>Auto</option>
+            <option value="long">Solo LONG</option>
+            <option value="short">Solo SHORT</option>
+          </select>
+          <button id="btnInforme">Generar informe</button>
+        </div>
+        <textarea id="aiOut" rows="10" style="width:100%;resize:vertical" placeholder="Acá verás el informe técnico completo…"></textarea>
+      </div>
+    </section>
+  </main>
+
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+<script>
+// ===== helpers =====
+const $ = s => document.querySelector(s);
+const fmt = (n,d=2)=> Number(n).toLocaleString('es-AR',{maximumFractionDigits:d});
+const isP2P = ex => (ex||'').toUpperCase().includes('P2P');
+
+// Logos por exchange
+const LOGOS = {
+  binance:'https://www.binance.com/favicon.ico', binancep2p:'https://www.binance.com/favicon.ico',
+  bybit:'https://www.bybit.com/favicon.ico', bybitp2p:'https://www.bybit.com/favicon.ico',
+  okx:'https://www.okx.com/favicon.ico', okexp2p:'https://www.okx.com/favicon.ico',
+  kucoin:'https://www.kucoin.com/favicon.ico', kucoinp2p:'https://www.kucoin.com/favicon.ico',
+  mexc:'https://www.mexc.com/favicon.ico', mexcp2p:'https://www.mexc.com/favicon.ico',
+  bitget:'https://www.bitget.com/favicon.ico', bitgetp2p:'https://www.bitget.com/favicon.ico',
+  huobi:'https://www.htx.com/favicon.ico', huobip2p:'https://www.htx.com/favicon.ico',
+  bitso:'https://bitso.com/favicon.ico', bitsoalpha:'https://bitso.com/favicon.ico',
+  lemoncash:'https://www.lemon.me/favicon.ico', ripio:'https://www.ripio.com/favicon.ico',
+  ripioexchange:'https://www.ripio.com/favicon.ico', letsbit:'https://www.letsbit.io/favicon.ico',
+  belo:'https://www.belo.app/favicon.ico', satoshitango:'https://www.satoshitango.com/favicon.ico',
+  cryptomkt:'https://www.cryptomkt.com/favicon.ico', cryptomktpro:'https://www.cryptomkt.com/favicon.ico',
+  cocoscrypto:'https://cocoscrypto.io/favicon.ico', universalcoins:'https://universalcoins.com.ar/favicon.ico',
+  trubit:'https://www.trubit.com/favicon.ico', vitawallet:'https://vitawallet.io/favicon.ico',
+  saldo:'https://saldo.com.ar/favicon.ico', tiendacrypto:'https://www.tiendacrypto.com/favicon.ico',
+  pluscrypto:'https://pluscrypto.com.ar/favicon.ico', paxfulp2p:'https://paxful.com/favicon.ico',
+  decrypto:'https://decrypto.la/favicon.ico', fiwind:'https://fiwind.io/favicon.ico',
+  bingxp2p:'https://bingx.com/favicon.ico'
+};
+function getLogo(ex){
+  const key = (ex||'').toLowerCase();
+  if (LOGOS[key]) return LOGOS[key];
+  if (key.endsWith('p2p') && LOGOS[key.replace('p2p','')]) return LOGOS[key.replace('p2p','')];
+  return '';
+}
+
+// ===== DÓLAR =====
+async function cargarDolar(){
+  try{
+    const d = await (await fetch('/api/dolar')).json();
+    const tipos = ["oficial","blue","tarjeta","mep","ccl","cripto"];
+    const sel = d.filter(x => tipos.includes((x.casa||x.nombre||'').toLowerCase()));
+    $('#cards-dolar').innerHTML = sel.map(row=>{
+      const nombre = (row.casa || row.nombre || 'DÓLAR').toUpperCase();
+      const venta = fmt(row.venta || row.venta_promedio || 0);
+      const compra = fmt(row.compra || row.compra_promedio || 0);
+      return `<div class="chip"><b>${nombre}</b>
+                <div class="mut">venta <b style="color:#fff">$ ${venta}</b></div>
+                <div class="mut">compra <b style="color:#fff">$ ${compra}</b></div>
+              </div>`;
+    }).join('') || '<div class="mut">Sin datos</div>';
+  }catch(e){
+    $('#cards-dolar').innerHTML = '<div class="mut">No se pudo cargar el dólar.</div>';
+  }
+}
+
+// ===== helpers tabla (fila ARS + USD + logo) =====
+function rowARSUSD(title, r, ars, usd, curARS='$', curUSD='US$'){
+  return `
+    <tr>
+      <td>
+        <div class="xcell">
+          ${getLogo(r.ex) ? `<img class="logo" src="${getLogo(r.ex)}" alt="${r.ex}" onerror="this.remove()">` : ''}
+          <span style="color:#9ecbff;font-weight:700">${(r.ex||'').toUpperCase()}</span>
+        </div>
+      </td>
+      <td>${title}</td>
+      <td class="right">
+        <div class="priceStack">
+          <span>${ars!=null? curARS+' '+fmt(ars): '—'}</span>
+          <span class="priceUSD">${usd!=null? curUSD+' '+fmt(usd): '—'}</span>
+        </div>
+      </td>
+      <td class="right"></td>
+    </tr>`;
+}
+function renderCardARSUSD(title, rows, mapUSD, curARS='$', curUSD='US$'){
+  const tbody = rows.map(r => rowARSUSD(title, r, r.bid, mapUSD ? mapUSD(r
