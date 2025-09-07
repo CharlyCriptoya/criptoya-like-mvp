@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arbolito — Gráfico /USDT + IA</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <style>
+    :root{--bg:#0e0f13;--card:#151821;--mut:#9aa3b2;--line:#232833;--txt:#e8ecf1}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif}
+    .wrap{max-width:1180px;margin:0 auto;padding:14px}
+    .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+    header{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    h1{font-size:18px;margin:0}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    select,input,button,textarea{background:#1b2030;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px 12px}
+    button{cursor:pointer}
+    .grid{display:grid;grid-template-columns:1.6fr 1fr;gap:12px}
+    .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+    .stat{background:#0f1422;border:1px solid #20283a;border-radius:10px;padding:10px}
+    .stat b{display:block;font-size:11px;color:#9aa3b2;margin-bottom:4px}
+    .stat .v{font-family:ui-monospace,Menlo,monospace}
+    .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+    .tab{padding:7px 10px;border:1px solid var(--line);border-radius:10px;font-size:13px;cursor:pointer}
+    .tab.active{border-color:#334155;background:#0f172a}
+    #chartWrap{position:relative;height:520px}
+    #chart{position:absolute;inset:0}
+    #cursor{position:absolute;pointer-events:none;background:#0b1220;border:1px solid #22304a;border-radius:8px;padding:6px 8px;font-size:12px;color:#dbeafe;display:none;white-space:pre}
+    .pill{padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
+    .mut{color:var(--mut);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>📈 Gráfico (Binance) & Stats 24 h</h1>
+      <div class="row">
+        <span class="pill" id="status">Listo</span>
+        <button id="pngBtn">Descargar PNG</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="row" style="gap:8px;margin-bottom:8px">
+          <label>Par
+            <select id="symbol">
+              <option>BTCUSDT</option>
+              <option selected>ETHUSDT</option>
+              <option>SOLUSDT</option>
+              <option>BNBUSDT</option>
+              <option>ADAUSDT</option>
+            </select>
+          </label>
+          <label>Intervalo
+            <select id="interval">
+              <option>1m</option><option selected>5m</option><option>15m</option>
+              <option>30m</option><option>1h</option><option>1d</option>
+            </select>
+          </label>
+          <button id="loadBtn">Cargar gráfico</button>
+        </div>
+
+        <!-- Gráfico -->
+        <div id="chartWrap">
+          <div id="chart"></div>
+          <div id="cursor"></div>
+        </div>
+
+        <!-- Tabs de intervalos rápidos -->
+        <div class="tabs" id="quickTabs">
+          <div class="tab" data-i="1m">1m</div>
+          <div class="tab active" data-i="5m">5m</div>
+          <div class="tab" data-i="15m">15m</div>
+          <div class="tab" data-i="30m">30m</div>
+          <div class="tab" data-i="1h">1h</div>
+          <div class="tab" data-i="1d">1d</div>
+        </div>
+
+        <!-- Stats 24h -->
+        <div class="stats">
+          <div class="stat"><b>Último</b><div class="v" id="lastV">—</div></div>
+          <div class="stat"><b>Máx 24 h</b><div class="v" id="highV">—</div></div>
+          <div class="stat"><b>Mín 24 h</b><div class="v" id="lowV">—</div></div>
+          <div class="stat"><b>Cambio 24 h</b><div class="v" id="chV">—</div></div>
+        </div>
+        <div class="mut" style="margin-top:6px">Mové el mouse para ver O/H/L/C y hora exacta. Doble click = ajustar vista.</div>
+      </div>
+
+      <div class="panel" style="display:flex;flex-direction:column;gap:8px">
+        <b>IA de análisis técnico</b>
+        <textarea id="userNote" placeholder="Opcional: plan (spot/futuros, apalancamiento, horizonte)..." style="width:100%;min-height:120px"></textarea>
+        <button id="aiBtn">Analizar con IA</button>
+        <div id="aiOut" class="mut" style="white-space:pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <script>
+    const elChart=document.getElementById('chart'),elCursor=document.getElementById('cursor'),statusEl=document.getElementById('status');
+    const symbolEl=document.getElementById('symbol'),intervalEl=document.getElementById('interval'),tabs=document.getElementById('quickTabs');
+    const lastV=document.getElementById('lastV'),highV=document.getElementById('highV'),lowV=document.getElementById('lowV'),chV=document.getElementById('chV');
+    const aiBtn=document.getElementById('aiBtn'),aiOut=document.getElementById('aiOut'),userNote=document.getElementById('userNote');
+    let chart,candle,priceLine,lastCandles=[];
+
+    function mkChart(){
+      elChart.innerHTML='';
+      chart=LightweightCharts.createChart(elChart,{layout:{background:{color:'#151821'},textColor:'#e8ecf1'},grid:{vertLines:{color:'#232833'},horzLines:{color:'#232833'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal}});
+      candle=chart.addCandlestickSeries({upColor:'#22c55e',downColor:'#ef4444',wickUpColor:'#22c55e',wickDownColor:'#ef4444',borderVisible:false});
+      chart.subscribeCrosshairMove(param=>{
+        if(!param.time||!param.seriesData.has(candle)){elCursor.style.display='none';return;}
+        const d=param.seriesData.get(candle),dt=new Date(param.time*1000);
+        elCursor.textContent=`${dt.toLocaleString()}\nO:${d.open} H:${d.high}\nL:${d.low} C:${d.close}`;
+        elCursor.style.left=(param.point.x+12)+'px';elCursor.style.top=(param.point.y+12)+'px';elCursor.style.display='block';
+      });
+    }
+    async function load(){
+      const s=symbolEl.value.trim(),i=intervalEl.value.trim();statusEl.textContent='Cargando…';
+      try{
+        const [kl,tkr]=await Promise.all([fetch(`/api/klines?symbol=${s}&interval=${i}&limit=800`).then(r=>r.json()),fetch(`/api/ticker24h?symbol=${s}`).then(r=>r.json())]);
+        lastCandles=kl;mkChart();candle.setData(kl.map(d=>({time:d.t,open:d.o,high:d.h,low:d.l,close:d.c})));chart.timeScale().fitContent();
+        const last=kl.at(-1);if(priceLine)candle.removePriceLine(priceLine);priceLine=candle.createPriceLine({price:last.c,color:'#2dd4bf',lineWidth:2,axisLabelVisible:true,title:'Último'});
+        lastV.textContent=tkr.lastPrice;highV.textContent=tkr.highPrice;lowV.textContent=tkr.lowPrice;chV.textContent=tkr.priceChangePercent+'%';statusEl.textContent='OK';
+      }catch(e){console.error(e);statusEl.textContent='Error';}
+    }
+    tabs.addEventListener('click',e=>{const t=e.target.closest('.tab');if(t){[...tabs.children].forEach(x=>x.classList.remove('active'));t.classList.add('active');intervalEl.value=t.dataset.i;load();}});
+    aiBtn.addEventListener('click',async()=>{if(!lastCandles.length)return;aiOut.textContent='Analizando…';const body={symbol:symbolEl.value,interval:intervalEl.value,user_note:userNote.value,candles:lastCandles.slice(-300)};const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();aiOut.textContent=d.text||d.error;});
+    document.getElementById('loadBtn').onclick=load;load();
+  </script>
+</body>
+</html>
